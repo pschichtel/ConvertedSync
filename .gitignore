@@ -1,0 +1,4 @@
+target/
+.idea/*
+!.idea/codeStyleSettings.xml
+*.json
