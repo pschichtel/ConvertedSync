@@ -3,14 +3,14 @@ import java.nio.file.{Path, Paths}
 import org.apache.tika.mime.MediaType
 import scopt.{OptionParser, Read}
 
-case class Config(source: Path, target: Path, scriptDir: Path, mime: String, extension: String, purge: Boolean)
+case class Config(source: Path, target: Path, scriptDir: Path, mime: String, extension: String, purge: Boolean, force: Boolean)
 
 object ArgsParser {
 
 	implicit val pathRead: Read[Path] = Read.reads(Paths.get(_))
 	implicit val mediaTypeRead: Read[MediaType] = Read.reads(MediaType.parse)
 
-	val defaults = Config(null, null, Paths.get("scripts"), null, null, true)
+	val defaults = Config(null, null, Paths.get("scripts"), null, null, true, false)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
 
@@ -38,6 +38,10 @@ object ArgsParser {
 
 		opt[Unit]("purge") action {(_, config) =>
 			config.copy(purge = true)
+		}
+
+		opt[Unit]('f', "force") action {(_, config) =>
+			config.copy(force = true)
 		}
 
 	}

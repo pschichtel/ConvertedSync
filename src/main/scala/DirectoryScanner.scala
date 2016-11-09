@@ -21,7 +21,7 @@ object DirectoryScanner {
 		}
 	}
 
-	def scanEnriched(path: Path): Stream[FileDescription] = {
+	def scanEnriched(path: Path): List[FileDescription] = {
 		val files = scan(path)
 		val metadata = new Metadata
 		files.map { f =>
@@ -45,6 +45,6 @@ object DirectoryScanner {
 			}
 
 			FileDescription(f, strippedRelative, Files.getLastModifiedTime(f), mediaType.toString)
-		}
+		}.toList
 	}
 }

@@ -14,13 +14,14 @@ object Main extends App {
 	else println("An error occurred during the conversion!")
 
 	def sync(conf: Config): Boolean = {
-		val sourceDir = conf.source
-		val targetDir = conf.target
-		val scriptDir = conf.scriptDir.toRealPath()
 
-		val sourceFiles = DirectoryScanner.scanEnriched(sourceDir)
+		println(s"Scanning the source directory: ${conf.source} ...")
+		val sourceFiles = DirectoryScanner.scanEnriched(conf.source)
+		println(s"Found ${sourceFiles.length} source files.")
+
+		println(s"Scanning the target directory: ${conf.target} ...")
 		val targetFiles = {
-			val files = DirectoryScanner.scanEnriched(targetDir).map(x => (x.withoutExtension, x)).toMap
+			val files = DirectoryScanner.scanEnriched(conf.target).map(x => (x.withoutExtension, x)).toMap
 
 			if (conf.purge) {
 				val sourceLookup = sourceFiles.map(_.withoutExtension).toSet
@@ -33,6 +34,7 @@ object Main extends App {
 				}
 			} else files
 		}
+		println(s"Found ${targetFiles.size} files in the target directory.")
 
 		val toProcess = sourceFiles.filter { f =>
 			if (targetFiles.contains(f.withoutExtension)) {
@@ -41,12 +43,14 @@ object Main extends App {
 			} else true
 		}
 
-		if (!Files.exists(targetDir)) {
-			Files.createDirectories(targetDir)
+		if (!Files.exists(conf.target)) {
+			Files.createDirectories(conf.target)
 		}
 
+		val scriptDir = conf.scriptDir.toRealPath()
+
 		val futures = toProcess.map { f =>
-			val target = targetDir.resolve(f.withoutExtension + "." + conf.extension)
+			val target = conf.target.resolve(f.withoutExtension + "." + conf.extension)
 
 			Future {
 				val tmpTarget = target.getParent.resolve(target.getFileName + ".tmp")
@@ -54,7 +58,7 @@ object Main extends App {
 				if (!Files.exists(dir)) {
 					Files.createDirectories(dir)
 				}
-				if (f.mime == conf.mime) {
+				if (f.mime == conf.mime && !conf.force) {
 					Files.copy(f.fullPath, tmpTarget)
 					tmpTarget
 				} else {
@@ -76,19 +80,19 @@ object Main extends App {
 				}
 			}.map { tmp =>
 				Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE)
-				println(s"Conversion complete for: ${f.fullPath}")
-				println(s"    Now at: $target")
+				println(s"Conversion complete for: ${f.fullPath}\n"
+				      + s"    Now at: $target")
 				target
 			} recover {
 				case e: ConversionException =>
-					println("Conversion failed for: " + f.fullPath)
-					println("    Error: " + e.getMessage)
+					println(s"Conversion failed for: ${f.fullPath}\n"
+					      + s"    Error: ${e.getMessage}")
 					null
 			}
 		}
 
-		val result = Await.result(Future.sequence(futures), Duration.Inf)
-		println("Done! Converted files:")
+		Await.result(Future.sequence(futures), Duration.Inf)
+		println("Done!")
 		true
 	}
 }
