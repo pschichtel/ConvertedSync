@@ -21,9 +21,9 @@ object Synchronizer {
 			if (conf.purge) {
 				val sourceLookup = sourceFiles.map(_.withoutExtension).toSet
 				files.filter { case (relative, file) =>
-					if (!sourceLookup.contains(relative)) {
+					if (!sourceLookup.contains(relative) || conf.purgeDifferentMime && conf.mime != file.mime) {
 						Files.delete(file.fullPath)
-						println(s"Purged ${file.fullPath}")
+						println(s"Purged ${file.fullPath} (${file.mime})")
 						false
 					} else true
 				}

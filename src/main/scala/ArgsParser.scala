@@ -3,14 +3,14 @@ import java.nio.file.{Path, Paths}
 import org.apache.tika.mime.MediaType
 import scopt.{OptionParser, Read}
 
-case class Config(source: Path, target: Path, scriptDir: Path, mime: String, extension: String, purge: Boolean, force: Boolean)
+case class Config(source: Path, target: Path, scriptDir: Path, mime: String, extension: String, purge: Boolean, purgeDifferentMime: Boolean, force: Boolean)
 
 object ArgsParser {
 
 	implicit val pathRead: Read[Path] = Read.reads(Paths.get(_))
 	implicit val mediaTypeRead: Read[MediaType] = Read.reads(MediaType.parse)
 
-	val defaults = Config(null, null, Paths.get("scripts"), null, null, true, false)
+	val defaults = Config(null, null, Paths.get("scripts"), null, null, purge = false, purgeDifferentMime = false, force = false)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
 
@@ -38,6 +38,10 @@ object ArgsParser {
 
 		opt[Unit]("purge") text "Delete files that are available in the target folder, but not in the source folder" action {(_, config) =>
 			config.copy(purge = true)
+		}
+
+		opt[Unit]("purge-different-mime") text "Delete files that are available in the target folder, but not in the source folder" action {(_, config) =>
+			config.copy(purgeDifferentMime = true)
 		}
 
 		opt[Unit]('f', "force") text "Force conversion even if the mime-type of source and target match" action {(_, config) =>
