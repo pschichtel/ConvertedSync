@@ -94,7 +94,7 @@ object Synchronizer {
 				throw new ConversionException(s"Converter for ${sourceFile.mime} was not successful: $status", sourceFile)
 			}
 		} else {
-			throw new ConversionException(s"Converter for ${sourceFile.mime} not found: $possibleScripts", sourceFile)
+			throw new ConversionException(s"Converter for ${sourceFile.mime} not found!", sourceFile)
 		}
 	}
 

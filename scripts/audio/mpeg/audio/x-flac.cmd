@@ -1,6 +1,6 @@
 
-set source="%1"
-set target="%2"
+set "source=%~1"
+set "target=%~2"
 
 if "%MP3_BITRATE%"=="" (
     set MP3_BITRATE=248
