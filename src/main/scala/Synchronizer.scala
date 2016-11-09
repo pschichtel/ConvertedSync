@@ -1,12 +1,19 @@
 import java.io.File
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.{Files, Path, StandardCopyOption}
+import java.util.concurrent.TimeUnit
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
 
 object Synchronizer {
+
+	def time[U](timeUnit: TimeUnit = TimeUnit.MILLISECONDS)(f: => U): Long = {
+		val startTime = System.currentTimeMillis()
+		f
+		timeUnit.convert(System.currentTimeMillis() - startTime, TimeUnit.MILLISECONDS)
+	}
 
 	def sync(conf: Config): Boolean = {
 
@@ -48,29 +55,40 @@ object Synchronizer {
 
 		val futures = toProcess.map { f =>
 			val target = conf.target.resolve(f.withoutExtension + "." + conf.extension)
+			val tmpTarget = target.getParent.resolve(s".${target.getFileName}.temporary")
 
 			Future {
-				val tmpTarget = target.getParent.resolve(s".${target.getFileName}.temporary")
 				val dir = target.getParent
 				if (!Files.exists(dir)) {
 					Files.createDirectories(dir)
 				}
-				if (f.mime == conf.mime && !conf.force) {
-					Files.copy(f.fullPath, tmpTarget)
-					tmpTarget
-				} else {
-					runScript(scriptDir, f, tmpTarget, conf.mime)
-					tmpTarget
+				if (!Files.exists(f.fullPath)) {
+					throw new ConversionException("The file was queued for conversion, but disappeared!", f)
 				}
-			}.map { tmp =>
-				Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE)
-				println(s"Conversion complete for: ${f.fullPath}\n"
-					+ s"    Now at: $target")
+				if (f.mime == conf.mime && !conf.force) {
+					println("The input file mime type matches the target mime type, copying...")
+					time() {
+						Files.copy(f.fullPath, tmpTarget)
+					}
+				} else {
+					val t = time() {
+						runScript(scriptDir, f, tmpTarget, conf.mime)
+					}
+
+					if (!Files.exists(tmpTarget)) {
+						throw new ConversionException(s"Converter did not generate file $tmpTarget", f)
+					}
+					t
+				}
+			}.map { time =>
+				Files.move(tmpTarget, target, StandardCopyOption.ATOMIC_MOVE)
+				println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
+					  + s"    Now at: $target")
 				target
 			} recover {
 				case e: ConversionException =>
 					println(s"Conversion failed for: ${f.fullPath}\n"
-						+ s"    Error: ${e.getMessage}")
+						  + s"    Error: ${e.getMessage}")
 					null
 			}
 		}
