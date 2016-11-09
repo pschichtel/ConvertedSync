@@ -50,7 +50,7 @@ object Synchronizer {
 			val target = conf.target.resolve(f.withoutExtension + "." + conf.extension)
 
 			Future {
-				val tmpTarget = target.getParent.resolve(target.getFileName + ".tmp")
+				val tmpTarget = target.getParent.resolve(s".${target.getFileName}.temporary")
 				val dir = target.getParent
 				if (!Files.exists(dir)) {
 					Files.createDirectories(dir)

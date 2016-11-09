@@ -3,5 +3,7 @@
 source="$1"
 target="$2"
 
+MP3_BITRATE=${MP3_BITRATE:-248}
+
 # explicit output format "-f mp3" is required as the conversion target will be a temp file.
-ffmpeg -y -i "$source" -ab 248k -map_metadata 0 -id3v2_version 3 -f mp3 "$target"
+ffmpeg -y -i "$source" -ab "${MP3_BITRATE}k" -map_metadata 0 -id3v2_version 3 -f mp3 "$target"
