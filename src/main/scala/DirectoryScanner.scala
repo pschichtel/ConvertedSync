@@ -1,5 +1,6 @@
+import java.io.File
 import java.nio.file.attribute.FileTime
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 
 import org.apache.tika.config.TikaConfig
 import org.apache.tika.io.TikaInputStream
@@ -7,7 +8,7 @@ import org.apache.tika.metadata.Metadata
 
 import scala.collection.JavaConversions._
 
-case class FileDescription(fullPath: Path, withoutExtension: Path, lastModified: FileTime, mime: String)
+case class FileDescription(fullPath: Path, withoutExtension: String, lastModified: FileTime, mime: String)
 
 object DirectoryScanner {
 
@@ -28,12 +29,12 @@ object DirectoryScanner {
 			val relative = path.relativize(f)
 			val fileName = relative.getFileName.toString
 			val strippedRelative = fileName.lastIndexOf('.') match {
-				case -1 => relative
+				case -1 => relative.toString
 				case index =>
 					val strippedName = fileName.substring(0, index)
 					val parent = relative.getParent
-					if (parent != null) parent.resolve(strippedName)
-					else Paths.get(strippedName)
+					if (parent != null) parent.toString  + File.separatorChar + strippedName
+					else strippedName
 
 			}
 
