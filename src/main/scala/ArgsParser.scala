@@ -14,33 +14,33 @@ object ArgsParser {
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
 
-		head("ConvertedSync", "Stuff")
+		head("ConvertedSync")
 
-		opt[Path]('s', "source-path") required() action { (path, config) =>
+		opt[Path]('s', "source-path") required() valueName "<path>" text "The source path for the synchronization" action { (path, config) =>
 			config.copy(source = path)
 		}
 
-		opt[Path]('t', "target-path") required() action { (path, config) =>
+		opt[Path]('t', "target-path") required() valueName "<path>" text "The target path for the synchronization" action { (path, config) =>
 			config.copy(target = path)
 		}
 
-		opt[Path]("script-dir") action { (path, config) =>
+		opt[Path]("script-dir") valueName "<path>" text "The base path of the conversion scripts/programs" action { (path, config) =>
 			config.copy(scriptDir = path.toRealPath())
 		}
 
-		opt[String]('e', "target-extension") required() action { (extension, config) =>
+		opt[String]('e', "target-extension") required() valueName "<extension>" text "The file extension newly converted files should have" action { (extension, config) =>
 			config.copy(extension = extension)
 		}
 
-		opt[MediaType]('m', "target-mime") required() action { (mime, config) =>
+		opt[MediaType]('m', "target-mime") required() valueName "<mime/type>" text "The target mime-type for the conversion" action { (mime, config) =>
 			config.copy(mime = mime.toString)
 		}
 
-		opt[Unit]("purge") action {(_, config) =>
+		opt[Unit]("purge") text "Delete files that are available in the target folder, but not in the source folder" action {(_, config) =>
 			config.copy(purge = true)
 		}
 
-		opt[Unit]('f', "force") action {(_, config) =>
+		opt[Unit]('f', "force") text "Force conversion even if the mime-type of source and target match" action {(_, config) =>
 			config.copy(force = true)
 		}
 

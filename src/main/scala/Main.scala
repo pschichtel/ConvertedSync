@@ -36,12 +36,14 @@ object Main extends App {
 		}
 		println(s"Found ${targetFiles.size} files in the target directory.")
 
+		println("Detecting files to be processed...")
 		val toProcess = sourceFiles.filter { f =>
 			if (targetFiles.contains(f.withoutExtension)) {
 				val target = targetFiles(f.withoutExtension)
 				target.lastModified.compareTo(f.lastModified) < 0
 			} else true
 		}
+		println(s"${toProcess.length} source files will be synchronized to the target folder.")
 
 		if (!Files.exists(conf.target)) {
 			Files.createDirectories(conf.target)
