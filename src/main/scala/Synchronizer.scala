@@ -1,7 +1,9 @@
 import java.io.File
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.{Files, Path, StandardCopyOption}
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit.SECONDS
+
+import Timing.time
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
@@ -9,21 +11,18 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 object Synchronizer {
 
-	def time[U](timeUnit: TimeUnit = TimeUnit.MILLISECONDS)(f: => U): Long = {
-		val startTime = System.currentTimeMillis()
-		f
-		timeUnit.convert(System.currentTimeMillis() - startTime, TimeUnit.MILLISECONDS)
-	}
 
 	def sync(conf: Config): Boolean = {
 
 		println(s"Scanning the source directory: ${conf.source} ...")
-		val sourceFiles = DirectoryScanner.scanEnriched(conf.source)
-		println(s"Found ${sourceFiles.length} source files.")
+		val (sourceFiles, sourceScanTime) = time(SECONDS) {
+			DirectoryScanner.scanEnriched(conf.source)
+		}
+		println(s"Found ${sourceFiles.length} source files in $sourceScanTime seconds.")
 
 		println(s"Scanning the target directory: ${conf.target} ...")
-		val targetFiles = {
-			val files = DirectoryScanner.scanEnriched(conf.target).map(x => (x.withoutExtension, x)).toMap
+		val (targetFiles, targetScanTime) = time(SECONDS) {
+			val files = DirectoryScanner.scanEnriched(conf.target, conf.purgeDifferentMime).map(x => (x.withoutExtension, x)).toMap
 
 			if (conf.purge) {
 				val sourceLookup = sourceFiles.map(_.withoutExtension).toSet
@@ -36,7 +35,7 @@ object Synchronizer {
 				}
 			} else files
 		}
-		println(s"Found ${targetFiles.size} files in the target directory.")
+		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
 
 		println("Detecting files to be processed...")
 		val toProcess = sourceFiles.filter { f =>
@@ -69,11 +68,11 @@ object Synchronizer {
 					println("The input file mime type matches the target mime type, copying...")
 					time() {
 						Files.copy(f.fullPath, tmpTarget)
-					}
+					}._2
 				} else {
 					val t = time() {
 						runScript(scriptDir, f, tmpTarget, conf.mime)
-					}
+					}._2
 
 					if (!Files.exists(tmpTarget)) {
 						throw new ConversionException(s"Converter did not generate file $tmpTarget", f)

@@ -22,7 +22,7 @@ object DirectoryScanner {
 		}
 	}
 
-	def scanEnriched(path: Path): List[FileDescription] = {
+	def scanEnriched(path: Path, detectMime: Boolean = true): List[FileDescription] = {
 		val files = scan(path)
 		val metadata = new Metadata
 		files.map { f =>
@@ -38,14 +38,17 @@ object DirectoryScanner {
 
 			}
 
-			val tikaStream = TikaInputStream.get(f)
-			val mediaType = try {
-				tika.getDetector.detect(tikaStream, metadata)
-			} finally {
-				tikaStream.close()
-			}
+			val mimeType = if (detectMime) {
+				val tikaStream = TikaInputStream.get(f)
+				val mediaType = try {
+					tika.getDetector.detect(tikaStream, metadata)
+				} finally {
+					tikaStream.close()
+				}
+				mediaType.toString
+			} else "unknown"
 
-			FileDescription(f, strippedRelative, Files.getLastModifiedTime(f), mediaType.toString)
+			FileDescription(f, strippedRelative, Files.getLastModifiedTime(f), mimeType)
 		}.toList
 	}
 }
