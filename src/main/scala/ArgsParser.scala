@@ -3,14 +3,14 @@ import java.nio.file.{Path, Paths}
 import org.apache.tika.mime.MediaType
 import scopt.{OptionParser, Read}
 
-case class Config(source: Path, target: Path, scriptDir: Path, mime: String, extension: String, purge: Boolean, purgeDifferentMime: Boolean, force: Boolean)
+case class Config(source: Path, target: Path, scriptDir: Path, mime: String, extension: String, purge: Boolean, purgeDifferentMime: Boolean, force: Boolean, createTarget: Boolean)
 
 object ArgsParser {
 
 	implicit val pathRead: Read[Path] = Read.reads(Paths.get(_))
 	implicit val mediaTypeRead: Read[MediaType] = Read.reads(MediaType.parse)
 
-	val defaults = Config(null, null, Paths.get("scripts"), null, null, purge = false, purgeDifferentMime = false, force = false)
+	val defaults = Config(null, null, Paths.get("scripts"), null, null, purge = false, purgeDifferentMime = false, force = false, createTarget = false)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
 
@@ -22,6 +22,10 @@ object ArgsParser {
 
 		opt[Path]('t', "target-path") required() valueName "<path>" text "The target path for the synchronization" action { (path, config) =>
 			config.copy(target = path)
+		}
+
+		opt[Unit]("create-target") text "Whether to create the target folder" action { (_, config) =>
+			config.copy(createTarget = true)
 		}
 
 		opt[Path]("script-dir") valueName "<path>" text "The base path of the conversion scripts/programs" action { (path, config) =>

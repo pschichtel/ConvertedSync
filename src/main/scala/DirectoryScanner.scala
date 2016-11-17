@@ -6,7 +6,7 @@ import org.apache.tika.config.TikaConfig
 import org.apache.tika.io.TikaInputStream
 import org.apache.tika.metadata.Metadata
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 case class FileDescription(fullPath: Path, withoutExtension: String, lastModified: FileTime, mime: String)
 
@@ -14,11 +14,11 @@ object DirectoryScanner {
 
 	val tika = new TikaConfig()
 
-	def scan(path: Path): Stream[Path] = {
+	def scan(path: Path): Iterator[Path] = {
 		if (Files.isDirectory(path)) {
-			Files.walk(path).iterator().toStream.filter(Files.isRegularFile(_))
+			Files.walk(path).iterator().asScala.filter(Files.isRegularFile(_))
 		} else {
-			Stream.empty
+			Iterator.empty
 		}
 	}
 

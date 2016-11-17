@@ -47,7 +47,12 @@ object Synchronizer {
 		println(s"${toProcess.length} source files will be synchronized to the target folder.")
 
 		if (!Files.exists(conf.target)) {
-			Files.createDirectories(conf.target)
+			if (conf.createTarget) {
+				Files.createDirectories(conf.target)
+			} else {
+				println("Target directory does not exist!")
+				System.exit(1)
+			}
 		}
 
 		val scriptDir = conf.scriptDir.toRealPath()
