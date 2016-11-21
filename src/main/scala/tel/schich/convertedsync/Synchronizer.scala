@@ -1,13 +1,15 @@
+package tel.schich.convertedsync
+
 import java.io.File
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.{Files, Path, StandardCopyOption}
 import java.util.concurrent.TimeUnit.SECONDS
 
-import Timing.time
+import tel.schich.convertedsync.Timing._
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 object Synchronizer {
 

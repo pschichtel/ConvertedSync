@@ -1,3 +1,5 @@
+package tel.schich.convertedsync
+
 import java.nio.file.{Path, Paths}
 
 import org.apache.tika.mime.MediaType

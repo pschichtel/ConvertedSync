@@ -1,3 +1,5 @@
+package tel.schich.convertedsync
+
 import java.util.concurrent.TimeUnit
 
 object Timing {

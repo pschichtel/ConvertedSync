@@ -1,3 +1,5 @@
+package tel.schich.convertedsync
+
 import java.io.File
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}

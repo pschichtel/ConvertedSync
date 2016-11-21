@@ -1,3 +1,5 @@
+package tel.schich.convertedsync
+
 
 class ConversionException(message: String, val source: FileDescription) extends Exception(message)
 
