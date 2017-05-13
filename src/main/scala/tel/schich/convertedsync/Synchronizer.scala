@@ -5,9 +5,6 @@ import java.lang.ProcessBuilder.Redirect
 import java.nio.file.{Files, Path, StandardCopyOption}
 import java.util.concurrent.TimeUnit.SECONDS
 
-import org.apache.tika.Tika
-import org.apache.tika.config.TikaConfig
-import org.apache.tika.mime.Patterns
 import tel.schich.convertedsync.Timing._
 
 import scala.concurrent.ExecutionContext.Implicits.global
