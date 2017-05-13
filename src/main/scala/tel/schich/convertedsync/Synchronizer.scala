@@ -5,6 +5,9 @@ import java.lang.ProcessBuilder.Redirect
 import java.nio.file.{Files, Path, StandardCopyOption}
 import java.util.concurrent.TimeUnit.SECONDS
 
+import org.apache.tika.Tika
+import org.apache.tika.config.TikaConfig
+import org.apache.tika.mime.Patterns
 import tel.schich.convertedsync.Timing._
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -15,16 +18,23 @@ object Synchronizer {
 
 
 	def sync(conf: Config): Boolean = {
+		val directoryScanner = new DirectoryScanner()
 
 		println(s"Scanning the source directory: ${conf.source} ...")
 		val (sourceFiles, sourceScanTime) = time(SECONDS) {
-			DirectoryScanner.scanEnriched(conf.source)
+			directoryScanner.scanEnriched(conf.source, allowFileAccess = !conf.mimeFromExtension, warnWrongExtension = conf.warnWrongExtension)
 		}
 		println(s"Found ${sourceFiles.length} source files in $sourceScanTime seconds.")
 
+		sourceFiles.groupBy(fd => fd.mime).foreach {
+			case (mime, files) => println(s"$mime -> ${files.length}")
+		}
+
+		System.exit(1)
+
 		println(s"Scanning the target directory: ${conf.target} ...")
 		val (targetFiles, targetScanTime) = time(SECONDS) {
-			val files = DirectoryScanner.scanEnriched(conf.target, conf.purgeDifferentMime).map(x => (x.withoutExtension, x)).toMap
+			val files = directoryScanner.scanEnriched(conf.target, conf.purgeDifferentMime, allowFileAccess = !conf.mimeFromExtension).map(x => (x.withoutExtension, x)).toMap
 
 			if (conf.purge) {
 				val sourceLookup = sourceFiles.map(_.withoutExtension).toSet
@@ -104,7 +114,7 @@ object Synchronizer {
 		true
 	}
 
-	def runScript(scriptDir: Path, sourceFile: FileDescription, targetFile: Path, targetMime: String) = {
+	def runScript(scriptDir: Path, sourceFile: FileDescription, targetFile: Path, targetMime: String): Unit = {
 		val possibleScripts = constructScripts(scriptDir, sourceFile.mime, targetMime).filter(Files.isExecutable)
 		if (possibleScripts.nonEmpty) {
 			val pb = new ProcessBuilder()

@@ -5,14 +5,19 @@ import java.nio.file.{Path, Paths}
 import org.apache.tika.mime.MediaType
 import scopt.{OptionParser, Read}
 
-case class Config(source: Path, target: Path, scriptDir: Path, mime: String, extension: String, purge: Boolean, purgeDifferentMime: Boolean, force: Boolean, createTarget: Boolean)
+case class Config(source: Path, target: Path,
+                  scriptDir: Path, mime: String,
+                  extension: String, purge: Boolean,
+                  purgeDifferentMime: Boolean, force: Boolean,
+                  createTarget: Boolean, mimeFromExtension: Boolean,
+                  warnWrongExtension: Boolean)
 
 object ArgsParser {
 
 	implicit val pathRead: Read[Path] = Read.reads(Paths.get(_))
 	implicit val mediaTypeRead: Read[MediaType] = Read.reads(MediaType.parse)
 
-	val defaults = Config(null, null, Paths.get("scripts"), null, null, purge = false, purgeDifferentMime = false, force = false, createTarget = false)
+	val defaults = Config(null, null, Paths.get("scripts"), null, null, purge = false, purgeDifferentMime = false, force = false, createTarget = false, mimeFromExtension = false, warnWrongExtension = true)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
 
@@ -54,7 +59,15 @@ object ArgsParser {
 			config.copy(force = true)
 		}
 
+		opt[Unit]("mime-from-extension") text "Use only the filename extension for mime detection (may be imprecise)" action {(_, config) =>
+			config.copy(mimeFromExtension = true)
+		}
+
+		opt[Unit]("no-extension-validation") text "Verify if the filename extension matches the mime type (relies on mime detection precision)" action {(_, config) =>
+			config.copy(warnWrongExtension = false)
+		}
+
 	}
 
-	def parse(args: Seq[String]) = parser.parse(args, defaults)
+	def parse(args: Seq[String]): Option[Config] = parser.parse(args, defaults)
 }
