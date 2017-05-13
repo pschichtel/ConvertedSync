@@ -1,6 +1,6 @@
 package tel.schich.convertedsync
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import org.apache.tika.mime.MediaType
 import scopt.{OptionParser, Read}
@@ -10,14 +10,15 @@ case class Config(source: Path, target: Path,
                   extension: String, purge: Boolean,
                   purgeDifferentMime: Boolean, force: Boolean,
                   createTarget: Boolean, mimeFromExtension: Boolean,
-                  warnWrongExtension: Boolean, threadCount: Int = 0)
+                  warnWrongExtension: Boolean, threadCount: Int = 0,
+                  intermediateDir: Option[Path])
 
 object ArgsParser {
 
 	implicit val pathRead: Read[Path] = Read.reads(Paths.get(_))
 	implicit val mediaTypeRead: Read[MediaType] = Read.reads(MediaType.parse)
 
-	val defaults = Config(null, null, Paths.get("scripts"), null, null, purge = false, purgeDifferentMime = false, force = false, createTarget = false, mimeFromExtension = false, warnWrongExtension = true)
+	val defaults = Config(null, null, Paths.get("scripts"), null, null, purge = false, purgeDifferentMime = false, force = false, createTarget = false, mimeFromExtension = false, warnWrongExtension = true, intermediateDir = None)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
 
@@ -67,13 +68,22 @@ object ArgsParser {
 			config.copy(warnWrongExtension = false)
 		}
 
-		opt[Int]('t', "threads") text "The number of threads to use for the conversion process. Limit this to your number of CPU cores unless the target directory is slow." action {(n, config) =>
-			val threads =
-				if (n <= 0) Runtime.getRuntime.availableProcessors()
-				else n
-			config.copy(threadCount = threads)
+		opt[Int]('t', "threads") valueName "<# threads>" text "The number of threads to use for the conversion process. Limit this to your number of CPU cores unless the target directory is slow." action {(n, config) =>
+			config.copy(threadCount = n)
 		}
 
+		opt[Path]("intermediate-dir") valueName "<path>" text "Set this in case the target path can not be directly converted to." action {(path, config) =>
+			config.copy(intermediateDir = Some(path))
+		}
+
+		checkConfig { config =>
+			if (config.intermediateDir.isDefined && !Files.isDirectory(config.intermediateDir.get))
+				failure("The intermediate directory must exist!")
+			else if (config.threadCount < 0)
+				failure("A negative amount of threads is not possible!")
+			else
+				success
+		}
 	}
 
 	def parse(args: Seq[String]): Option[Config] = parser.parse(args, defaults)

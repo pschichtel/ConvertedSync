@@ -64,14 +64,27 @@ object Synchronizer {
 
 		val scriptDir = conf.scriptDir.toRealPath()
 
-		println(s"Using ${conf.threadCount} thread(s) for the conversion.")
-		for (p <- Seq("minThreads", "numThreads", "maxThreads")) {
-			System.setProperty(s"scala.concurrent.context.$p", "" + conf.threadCount)
+		if (conf.threadCount > 0) {
+			println(s"Using ${conf.threadCount} thread(s) for the conversion.")
+			for (p <- Seq("minThreads", "numThreads", "maxThreads")) {
+				System.setProperty(s"scala.concurrent.context.$p", "" + conf.threadCount)
+			}
 		}
 
 		val futures = toProcess.map { f =>
+			// the target path
 			val target = conf.target.resolve(f.withoutExtension + "." + conf.extension)
+			// a temporary target path on the same file system as the target path
 			val tmpTarget = target.getParent.resolve(s".${target.getFileName}.temporary")
+			// an intermediate target path on an arbitrary file system
+			val intermediateTarget = conf.intermediateDir.map {d =>
+				val fileName = f.fullPath.getFileName.toString
+				val tempFile = Files.createTempFile(d, "intermediate_", s"_$fileName")
+				if (Files.exists(tempFile)) {
+					Files.delete(tempFile)
+				}
+				tempFile
+			}.getOrElse(tmpTarget)
 
 			Future {
 				val dir = target.getParent
@@ -84,20 +97,23 @@ object Synchronizer {
 				if (f.mime == conf.mime && !conf.force) {
 					println("The input file mime type matches the target mime type, copying...")
 					time() {
-						Files.copy(f.fullPath, tmpTarget)
+						Files.copy(f.fullPath, intermediateTarget)
 					}._2
 				} else {
 					val t = time() {
-						runScript(scriptDir, f, tmpTarget, conf.mime)
+						runScript(scriptDir, f, intermediateTarget, conf.mime)
 					}._2
 
-					if (!Files.exists(tmpTarget)) {
-						throw new ConversionException(s"Converter did not generate file $tmpTarget", f)
+					if (!Files.exists(intermediateTarget)) {
+						throw new ConversionException(s"Converter did not generate file $intermediateTarget", f)
 					}
 					t
 				}
 			}.map { time =>
-				Files.move(tmpTarget, target, StandardCopyOption.ATOMIC_MOVE)
+				if (!intermediateTarget.equals(tmpTarget)) {
+					moveAtomic(intermediateTarget, tmpTarget)
+				}
+				moveAtomic(tmpTarget, target)
 				println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
 					  + s"    Now at: $target")
 				target
@@ -141,6 +157,10 @@ object Synchronizer {
 			val name = script.getFileName
 			pathExt.split(File.pathSeparatorChar).map(ext => parent.resolve(name + ext)) :+ script
 		} else List(script)
+	}
+
+	private def moveAtomic(from: Path, to: Path): Unit = {
+		Files.move(from, to, StandardCopyOption.ATOMIC_MOVE)
 	}
 
 }
