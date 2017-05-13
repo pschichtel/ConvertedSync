@@ -27,8 +27,6 @@ object Synchronizer {
 			case (mime, files) => println(s"$mime -> ${files.length}")
 		}
 
-		System.exit(1)
-
 		println(s"Scanning the target directory: ${conf.target} ...")
 		val (targetFiles, targetScanTime) = time(SECONDS) {
 			val files = directoryScanner.scanEnriched(conf.target, conf.purgeDifferentMime, allowFileAccess = !conf.mimeFromExtension).map(x => (x.withoutExtension, x)).toMap
@@ -65,6 +63,11 @@ object Synchronizer {
 		}
 
 		val scriptDir = conf.scriptDir.toRealPath()
+
+		println(s"Using ${conf.threadCount} thread(s) for the conversion.")
+		for (p <- Seq("minThreads", "numThreads", "maxThreads")) {
+			System.setProperty(s"scala.concurrent.context.$p", "" + conf.threadCount)
+		}
 
 		val futures = toProcess.map { f =>
 			val target = conf.target.resolve(f.withoutExtension + "." + conf.extension)
