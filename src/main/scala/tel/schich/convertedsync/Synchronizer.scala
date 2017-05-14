@@ -111,7 +111,13 @@ object Synchronizer {
 				}
 			}.map { time =>
 				if (!intermediateTarget.equals(tmpTarget)) {
-					moveFile(intermediateTarget, tmpTarget)
+					try {
+						moveFile(intermediateTarget, tmpTarget)
+					} catch {
+						case e: Exception if Files.exists(intermediateTarget) =>
+							Files.delete(intermediateTarget)
+							throw e
+					}
 				}
 				moveFile(tmpTarget, target)
 				println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
