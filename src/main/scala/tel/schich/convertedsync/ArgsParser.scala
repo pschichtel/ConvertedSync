@@ -10,15 +10,24 @@ case class Config(source: Path, target: Path,
                   extension: String, purge: Boolean,
                   purgeDifferentMime: Boolean, force: Boolean,
                   createTarget: Boolean, mimeFromExtension: Boolean,
-                  warnWrongExtension: Boolean, threadCount: Int = 0,
-                  intermediateDir: Option[Path])
+                  warnWrongExtension: Boolean, threadCount: Int,
+                  intermediateDir: Option[Path], silenceConverter: Boolean)
 
 object ArgsParser {
 
 	implicit val pathRead: Read[Path] = Read.reads(Paths.get(_))
 	implicit val mediaTypeRead: Read[MediaType] = Read.reads(MediaType.parse)
 
-	val defaults = Config(null, null, Paths.get("scripts"), null, null, purge = false, purgeDifferentMime = false, force = false, createTarget = false, mimeFromExtension = false, warnWrongExtension = true, intermediateDir = None)
+	val defaults = Config(
+		null, null,
+		Paths.get("scripts"), null,
+		null, purge = false,
+		purgeDifferentMime = false,
+		force = false, createTarget = false,
+		mimeFromExtension = false, warnWrongExtension = true,
+		threadCount = 0, intermediateDir = None,
+		silenceConverter = false
+	)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
 
@@ -74,6 +83,10 @@ object ArgsParser {
 
 		opt[Path]("intermediate-dir") valueName "<path>" text "Set this in case the target path can not be directly converted to." action {(path, config) =>
 			config.copy(intermediateDir = Some(path))
+		}
+
+		opt[Unit]("silence-converter") text "Don't forward the output of the conversion processes" action {(_, config) =>
+			config.copy(silenceConverter = true)
 		}
 
 		checkConfig { config =>

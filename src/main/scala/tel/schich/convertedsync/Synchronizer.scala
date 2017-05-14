@@ -101,7 +101,7 @@ object Synchronizer {
 					}._2
 				} else {
 					val t = time() {
-						runScript(scriptDir, f, intermediateTarget, conf.mime)
+						runScript(scriptDir, f, intermediateTarget, conf.mime, !conf.silenceConverter)
 					}._2
 
 					if (!Files.exists(intermediateTarget)) {
@@ -130,14 +130,16 @@ object Synchronizer {
 		true
 	}
 
-	def runScript(scriptDir: Path, sourceFile: FileDescription, targetFile: Path, targetMime: String): Unit = {
+	def runScript(scriptDir: Path, sourceFile: FileDescription, targetFile: Path, targetMime: String, forwardIO: Boolean): Unit = {
 		val possibleScripts = constructScripts(scriptDir, sourceFile.mime, targetMime).filter(Files.isExecutable)
 		if (possibleScripts.nonEmpty) {
 			val pb = new ProcessBuilder()
 			pb.command(possibleScripts.head.toString, sourceFile.fullPath.toString, targetFile.toString)
-			pb.redirectInput(Redirect.INHERIT)
-			pb.redirectOutput(Redirect.INHERIT)
-			pb.redirectError(Redirect.INHERIT)
+			if (forwardIO) {
+				pb.redirectInput(Redirect.INHERIT)
+				pb.redirectOutput(Redirect.INHERIT)
+				pb.redirectError(Redirect.INHERIT)
+			}
 			val process = pb.start()
 			val status = process.waitFor()
 			if (status != 0) {
