@@ -2,7 +2,7 @@ package tel.schich.convertedsync
 
 import java.io.File
 import java.lang.ProcessBuilder.Redirect
-import java.nio.file.{Files, Path, StandardCopyOption}
+import java.nio.file._
 import java.util.concurrent.TimeUnit.SECONDS
 
 import tel.schich.convertedsync.Timing._
@@ -111,9 +111,9 @@ object Synchronizer {
 				}
 			}.map { time =>
 				if (!intermediateTarget.equals(tmpTarget)) {
-					moveAtomic(intermediateTarget, tmpTarget)
+					moveFile(intermediateTarget, tmpTarget)
 				}
-				moveAtomic(tmpTarget, target)
+				moveFile(tmpTarget, target)
 				println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
 					  + s"    Now at: $target")
 				target
@@ -159,8 +159,22 @@ object Synchronizer {
 		} else List(script)
 	}
 
-	private def moveAtomic(from: Path, to: Path): Unit = {
-		Files.move(from, to, StandardCopyOption.ATOMIC_MOVE)
+	private def moveFile(from: Path, to: Path): Unit = {
+		try {
+			// Try an atomic move (rename in Linux) operation
+			Files.move(from, to, StandardCopyOption.ATOMIC_MOVE)
+		} catch {
+			case _: AtomicMoveNotSupportedException =>
+				try {
+					// Try a simple move operation (move in Linux)
+					Files.move(from, to)
+				} catch {
+					case _: FileSystemException =>
+						// Copy the source and delete it afterwards if successful
+						Files.copy(from, to)
+						Files.delete(from)
+				}
+		}
 	}
 
 }
