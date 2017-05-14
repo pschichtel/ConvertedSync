@@ -11,7 +11,8 @@ case class Config(source: Path, target: Path,
                   purgeDifferentMime: Boolean, force: Boolean,
                   createTarget: Boolean, mimeFromExtension: Boolean,
                   warnWrongExtension: Boolean, threadCount: Int,
-                  intermediateDir: Option[Path], silenceConverter: Boolean)
+                  intermediateDir: Option[Path], silenceConverter: Boolean,
+                  lowSpaceThreshold: Double)
 
 object ArgsParser {
 
@@ -26,7 +27,7 @@ object ArgsParser {
 		force = false, createTarget = false,
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
-		silenceConverter = false
+		silenceConverter = false, lowSpaceThreshold = 0
 	)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
@@ -89,11 +90,17 @@ object ArgsParser {
 			config.copy(silenceConverter = true)
 		}
 
+		opt[Int]("low-disk-space-threshold") text "The free disk space percentage that may not be used for synced files (integer in [0, 100])" action {(i, config) => {
+			config.copy(lowSpaceThreshold = i / 100d)
+		}}
+
 		checkConfig { config =>
 			if (config.intermediateDir.isDefined && !Files.isDirectory(config.intermediateDir.get))
 				failure("The intermediate directory must exist!")
 			else if (config.threadCount < 0)
 				failure("A negative amount of threads is not possible!")
+			else if (config.lowSpaceThreshold < 0 || config.lowSpaceThreshold > 1)
+				failure("The free space threshold may not be lower than 0% or higher than 100%.")
 			else
 				success
 		}

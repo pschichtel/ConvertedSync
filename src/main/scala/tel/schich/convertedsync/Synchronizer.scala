@@ -91,9 +91,17 @@ object Synchronizer {
 				if (!Files.exists(dir)) {
 					Files.createDirectories(dir)
 				}
+				val fileStore = Files.getFileStore(dir)
+				val relativeFreeSpace = fileStore.getUsableSpace / fileStore.getTotalSpace.asInstanceOf[Double]
+				println("Free space: %1.2f%".format(relativeFreeSpace))
+				if (relativeFreeSpace < conf.lowSpaceThreshold) {
+					throw new ConversionException(s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)", f)
+				}
+
 				if (!Files.exists(f.fullPath)) {
 					throw new ConversionException("The file was queued for conversion, but disappeared!", f)
 				}
+
 				if (f.mime == conf.mime && !conf.force) {
 					println("The input file mime type matches the target mime type, copying...")
 					time() {
