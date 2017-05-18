@@ -93,7 +93,7 @@ object Synchronizer {
 				}
 				val fileStore = Files.getFileStore(dir)
 				val relativeFreeSpace = fileStore.getUsableSpace / fileStore.getTotalSpace.asInstanceOf[Double]
-				println("Free space: %1.2f%%".format(relativeFreeSpace))
+				println("Free space on target file system: %1.2f%%".format(relativeFreeSpace))
 				if (relativeFreeSpace < conf.lowSpaceThreshold) {
 					throw new ConversionException(s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)", f)
 				}
