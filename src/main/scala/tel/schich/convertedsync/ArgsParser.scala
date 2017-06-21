@@ -111,6 +111,8 @@ object ArgsParser {
 				failure("A negative amount of threads is not possible!")
 			else if (config.lowSpaceThreshold < 0 || config.lowSpaceThreshold > 1)
 				failure("The free space threshold may not be lower than 0% or higher than 100%.")
+			else if (config.ioAdapter.isDefined && (!config.mimeFromExtension || config.intermediateDir.isEmpty))
+				failure("IO adapters require file extension based mime detection and an intermediate directory!")
 			else
 				success
 		}
