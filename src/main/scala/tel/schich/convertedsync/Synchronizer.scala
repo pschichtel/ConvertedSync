@@ -62,7 +62,7 @@ object Synchronizer {
 			}
 		}
 
-		val scriptDir = conf.scriptDir.toRealPath()
+		val scriptDir = conf.convertersDir.toRealPath()
 
 		if (conf.threadCount > 0) {
 			println(s"Using ${conf.threadCount} thread(s) for the conversion.")

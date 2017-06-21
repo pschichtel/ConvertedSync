@@ -6,13 +6,14 @@ import org.apache.tika.mime.MediaType
 import scopt.{OptionParser, Read}
 
 case class Config(source: Path, target: Path,
-                  scriptDir: Path, mime: String,
+                  convertersDir: Path, mime: String,
                   extension: String, purge: Boolean,
                   purgeDifferentMime: Boolean, force: Boolean,
                   createTarget: Boolean, mimeFromExtension: Boolean,
                   warnWrongExtension: Boolean, threadCount: Int,
                   intermediateDir: Option[Path], silenceConverter: Boolean,
-                  lowSpaceThreshold: Double)
+                  lowSpaceThreshold: Double, ioAdapter: Option[String],
+                  adaptersDir: Path)
 
 object ArgsParser {
 
@@ -21,13 +22,14 @@ object ArgsParser {
 
 	val defaults = Config(
 		null, null,
-		Paths.get("scripts"), null,
+		Paths.get("converters"), null,
 		null, purge = false,
 		purgeDifferentMime = false,
 		force = false, createTarget = false,
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
-		silenceConverter = false, lowSpaceThreshold = 0
+		silenceConverter = false, lowSpaceThreshold = 0,
+		ioAdapter = None, adaptersDir = Paths.get("adapters")
 	)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
@@ -46,8 +48,8 @@ object ArgsParser {
 			config.copy(createTarget = true)
 		}
 
-		opt[Path]("script-dir") valueName "<path>" text "The base path of the conversion scripts/programs." action { (path, config) =>
-			config.copy(scriptDir = path.toRealPath())
+		opt[Path]("converters-dir") valueName "<path>" text "The base path of the conversion programs." action { (path, config) =>
+			config.copy(convertersDir = path.toRealPath())
 		}
 
 		opt[String]('e', "target-extension") required() valueName "<extension>" text "The file extension newly converted files should have." action { (extension, config) =>
@@ -86,13 +88,21 @@ object ArgsParser {
 			config.copy(intermediateDir = Some(path))
 		}
 
-		opt[Unit]('q', "silence-converter") text "Don't forward the output of the conversion processes" action {(_, config) =>
+		opt[Unit]('q', "silence-converter") text "Don't forward the output of the conversion processes." action {(_, config) =>
 			config.copy(silenceConverter = true)
 		}
 
-		opt[Int]("low-disk-space-threshold") text "The free disk space percentage that may not be used for synced files (integer in [0, 100])" action {(i, config) => {
+		opt[Int]("low-disk-space-threshold") text "The free disk space percentage that may not be used for synced files (integer in [0, 100])" action {(i, config) =>
 			config.copy(lowSpaceThreshold = i / 100d)
-		}}
+		}
+
+		opt[String]("io-adapter") text "Use the given IO adapter script" action {(adapter, conf) =>
+			conf.copy(ioAdapter = Some(adapter))
+		}
+
+		opt[Path]("adapters-dir") valueName "<path>" text "The base path of the conversion programs." action {(path, conf) =>
+			conf.copy(adaptersDir = path)
+		}
 
 		checkConfig { config =>
 			if (config.intermediateDir.isDefined && !Files.isDirectory(config.intermediateDir.get))

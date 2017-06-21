@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+ADB_BIN="${ADB_BIN:-"$(which adb)"}"
+
+selection=""
+if [[ ! -z "$ADB_SELECT_DEVICE" ]]
+then
+    selection="-s $(adb devices -l | grep -P '\sdevice\s' | grep "$ADB_SELECT_DEVICE" | grep -oP '^\S+')"
+fi
+
+adb_run()
+{
+    "$ADB_BIN" $selection "$@"
+}
+
+adb_shell()
+{
+    adb_run shell "$@"
+}
+
+adb_push()
+{
+    adb_run push "$@"
+}
+
+list_files()
+{
+    local path="${1?no base path given!}"
+    adb_shell find "$path" -type f
+}
+
+rm_file()
+{
+    local path="${1?no file path given!}"
+    adb_shell rm -v "$path"
+}
+
+move_file()
+{
+    local local_path="${1?no local path given!}"
+    local remote_path="${2?no remote path given!}"
+    adb_push "$local_path" "$remote_path"
+    rm -v "$local_path"
+}
+
+echo_err()
+{
+    (>&2 echo "$@")
+}
+
+command="$1"
+shift 1
+case "$command" in
+    list)
+        list_files "$@"
+        exit $?
+        ;;
+    rm)
+        rm_file "$@"
+        exit $?
+        ;;
+    move)
+        move_file "$@"
+        exit $?
+        ;;
+    *)
+        if [[ -z "$command" ]]
+        then
+            echo_err "No command given!"
+        else
+            echo_err "Invalid command '${command}'!"
+        fi
+        echo_err "Use one of: list, rm or move."
+        exit 255
+esac
