@@ -86,7 +86,7 @@ object ArgsParser {
 			config.copy(intermediateDir = Some(path))
 		}
 
-		opt[Unit]("silence-converter") text "Don't forward the output of the conversion processes" action {(_, config) =>
+		opt[Unit]('q', "silence-converter") text "Don't forward the output of the conversion processes" action {(_, config) =>
 			config.copy(silenceConverter = true)
 		}
 
