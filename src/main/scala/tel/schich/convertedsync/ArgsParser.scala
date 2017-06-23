@@ -4,6 +4,8 @@ import java.nio.file.{Files, Path, Paths}
 
 import org.apache.tika.mime.MediaType
 import scopt.{OptionParser, Read}
+import tel.schich.convertedsync.io.LocalAdapter
+import tel.schich.convertedsync.io.LocalAdapter.isLocal
 
 case class Config(source: Path, target: Path,
                   convertersDir: Path, mime: String,
@@ -12,7 +14,7 @@ case class Config(source: Path, target: Path,
                   createTarget: Boolean, mimeFromExtension: Boolean,
                   warnWrongExtension: Boolean, threadCount: Int,
                   intermediateDir: Option[Path], silenceConverter: Boolean,
-                  lowSpaceThreshold: Double, ioAdapter: Option[String],
+                  lowSpaceThreshold: Double, ioAdapter: String,
                   adaptersDir: Path)
 
 object ArgsParser {
@@ -29,7 +31,7 @@ object ArgsParser {
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
 		silenceConverter = false, lowSpaceThreshold = 0,
-		ioAdapter = None, adaptersDir = Paths.get("adapters")
+		ioAdapter = LocalAdapter.name, adaptersDir = Paths.get("adapters")
 	)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
@@ -97,7 +99,7 @@ object ArgsParser {
 		}
 
 		opt[String]("io-adapter") text "Use the given IO adapter script" action {(adapter, conf) =>
-			conf.copy(ioAdapter = Some(adapter))
+			conf.copy(ioAdapter = adapter)
 		}
 
 		opt[Path]("adapters-dir") valueName "<path>" text "The base path of the conversion programs." action {(path, conf) =>
@@ -111,7 +113,7 @@ object ArgsParser {
 				failure("A negative amount of threads is not possible!")
 			else if (config.lowSpaceThreshold < 0 || config.lowSpaceThreshold > 1)
 				failure("The free space threshold may not be lower than 0% or higher than 100%.")
-			else if (config.ioAdapter.isDefined && (!config.mimeFromExtension || config.intermediateDir.isEmpty))
+			else if (!isLocal(config.ioAdapter) && (!config.mimeFromExtension || config.intermediateDir.isEmpty))
 				failure("IO adapters require file extension based mime detection and an intermediate directory!")
 			else
 				success

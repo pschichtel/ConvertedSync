@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 ADB_BIN="${ADB_BIN:-"$(which adb)"}"
+ADB_SELECT_DEVICE="${ADB_SELECT_DEVICE:-""}"
 
 selection=""
 if [[ ! -z "$ADB_SELECT_DEVICE" ]]
@@ -11,36 +12,76 @@ fi
 adb_run()
 {
     "$ADB_BIN" $selection "$@"
+    return $?
 }
 
 adb_shell()
 {
     adb_run shell "$@"
+    return $?
 }
 
 adb_push()
 {
     adb_run push "$@"
+    return $?
 }
 
 list_files()
 {
     local path="${1?no base path given!}"
-    adb_shell find "$path" -type f
+    adb_shell "TZ=UTC find '$path' -type f -exec ls -ao {} \;"
+    return $?
 }
 
 rm_file()
 {
     local path="${1?no file path given!}"
-    adb_shell rm -v "$path"
+    adb_shell "rm -v '$path'"
+    return $?
+}
+
+copy_file()
+{
+    local from="${1?no local path given!}"
+    local to="${2?no remote path given!}"
+    adb_push "$from" "$to"
+    result=$?
+    if [[ $result -ne 0 ]]
+    then
+        echo_err "Failed to push '${from}' to '${to}'!"
+        return $result
+    fi
+    return 0
 }
 
 move_file()
 {
-    local local_path="${1?no local path given!}"
-    local remote_path="${2?no remote path given!}"
-    adb_push "$local_path" "$remote_path"
-    rm -v "$local_path"
+    local from="${1?no local path given!}"
+    local to="${2?no remote path given!}"
+    copy_file "$from" "$to"
+    result=$?
+    if [[ $result -ne 0 ]]
+    then
+        return $result
+    fi
+    rm -v "$from"
+    return $?
+}
+
+rename_file()
+{
+    local from="${1?no source path given!}"
+    local to="${2?no target path given!}"
+    adb_shell "mv '${from}' '${to}'"
+    return $?
+}
+
+file_exists()
+{
+    local path="${1?no file path given!}"
+    adb_shell "stat '$path'"
+    return $?
 }
 
 echo_err()
@@ -59,9 +100,25 @@ case "$command" in
         rm_file "$@"
         exit $?
         ;;
+    copy)
+        copy_file "$@"
+        exit $?
+        ;;
     move)
         move_file "$@"
         exit $?
+        ;;
+    rename)
+        rename_file "$@"
+        exit $?
+        ;;
+    exists)
+        file_exists "$@"
+        exit $?
+        ;;
+    line-pattern)
+        echo '^(?:\S+\s+){4}(\S+\s+\S+)\s(.+)$'
+        exit 0
         ;;
     *)
         if [[ -z "$command" ]]

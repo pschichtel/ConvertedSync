@@ -1,11 +1,12 @@
 package tel.schich.convertedsync
 
-import java.io.File
-import java.lang.ProcessBuilder.Redirect
 import java.nio.file._
 import java.util.concurrent.TimeUnit.SECONDS
 
-import tel.schich.convertedsync.Timing._
+import org.apache.tika.config.TikaConfig
+import tel.schich.convertedsync.Timing.time
+import tel.schich.convertedsync.io.{FileInfo, IOAdapter, LocalAdapter, ShellAdapter}
+import tel.schich.convertedsync.mime.TikaMimeDetector
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
@@ -13,29 +14,29 @@ import scala.concurrent.{Await, Future}
 
 object Synchronizer {
 
+	val TempSuffix: String = ".temporary"
 
-	def sync(conf: Config): Boolean = {
-		val directoryScanner = new DirectoryScanner()
-
+	private def syncFromTo(conf: Config, local: IOAdapter, remote: IOAdapter): Boolean = {
 		println(s"Scanning the source directory: ${conf.source} ...")
 		val (sourceFiles, sourceScanTime) = time(SECONDS) {
-			directoryScanner.scanEnriched(conf.source, allowFileAccess = !conf.mimeFromExtension, warnWrongExtension = conf.warnWrongExtension)
+			local.files(conf.source.toString)
 		}
 		println(s"Found ${sourceFiles.length} source files in $sourceScanTime seconds.")
 
 		sourceFiles.groupBy(fd => fd.mime).foreach {
-			case (mime, files) => println(s"$mime -> ${files.length}")
+			case (group, files) => println(s"$group -> ${files.length}")
 		}
 
 		println(s"Scanning the target directory: ${conf.target} ...")
 		val (targetFiles, targetScanTime) = time(SECONDS) {
-			val files = directoryScanner.scanEnriched(conf.target, conf.purgeDifferentMime, allowFileAccess = !conf.mimeFromExtension).map(x => (x.withoutExtension, x)).toMap
+
+			val files = remote.files(conf.target.toString).map(x => (x.core, x)).toMap
 
 			if (conf.purge) {
-				val sourceLookup = sourceFiles.map(_.withoutExtension).toSet
+				val sourceLookup = sourceFiles.map(_.core).toSet
 				files.filter { case (relative, file) =>
 					if (!sourceLookup.contains(relative) || conf.purgeDifferentMime && conf.mime != file.mime) {
-						Files.delete(file.fullPath)
+						remote.delete(file.fullPath)
 						println(s"Purged ${file.fullPath} (${file.mime})")
 						false
 					} else true
@@ -46,8 +47,8 @@ object Synchronizer {
 
 		println("Detecting files to be processed...")
 		val toProcess = sourceFiles.filter { f =>
-			if (targetFiles.contains(f.withoutExtension)) {
-				val target = targetFiles(f.withoutExtension)
+			if (targetFiles.contains(f.core)) {
+				val target = targetFiles(f.core)
 				target.lastModified.compareTo(f.lastModified) < 0
 			} else true
 		}
@@ -73,21 +74,23 @@ object Synchronizer {
 
 		val futures = toProcess.map { f =>
 			// the target path
-			val target = conf.target.resolve(f.withoutExtension + "." + conf.extension)
+			val target = conf.target.toString + local.separator + f.core + '.' + conf.extension
 			// a temporary target path on the same file system as the target path
-			val tmpTarget = target.getParent.resolve(s".${target.getFileName}.temporary")
+			val tmpTarget = target + TempSuffix
 			// an intermediate target path on an arbitrary file system
 			val intermediateTarget = conf.intermediateDir.map {d =>
-				val fileName = f.fullPath.getFileName.toString
+				val fileName = f.fileName
 				val tempFile = Files.createTempFile(d, "intermediate_", s"_$fileName")
 				if (Files.exists(tempFile)) {
 					Files.delete(tempFile)
 				}
-				tempFile
+				tempFile.toString
 			}.getOrElse(tmpTarget)
 
+			val usingIntermediate = !intermediateTarget.equals(tmpTarget)
+
 			Future {
-				val dir = target.getParent
+				val dir = Paths.get(target).getParent
 				if (!Files.exists(dir)) {
 					Files.createDirectories(dir)
 				}
@@ -98,43 +101,46 @@ object Synchronizer {
 					throw new ConversionException(s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)", f)
 				}
 
-				if (!Files.exists(f.fullPath)) {
+				val fullPath = Paths.get(f.fullPath)
+
+				if (!Files.exists(fullPath)) {
 					throw new ConversionException("The file was queued for conversion, but disappeared!", f)
 				}
 
 				if (f.mime == conf.mime && !conf.force) {
 					println("The input file mime type matches the target mime type, copying...")
 					time() {
-						Files.copy(f.fullPath, intermediateTarget)
+						local.copy(f.fullPath, intermediateTarget)
 					}._2
 				} else {
 					val t = time() {
-						runScript(scriptDir, f, intermediateTarget, conf.mime, !conf.silenceConverter)
+						runConverter(scriptDir, f, intermediateTarget, conf.mime, !conf.silenceConverter)
 					}._2
 
-					if (!Files.exists(intermediateTarget)) {
+					if (!usingIntermediate && !remote.exists(intermediateTarget) ||
+						 usingIntermediate && !local.exists(intermediateTarget)) {
 						throw new ConversionException(s"Converter did not generate file $intermediateTarget", f)
 					}
 					t
 				}
 			}.map { time =>
-				if (!intermediateTarget.equals(tmpTarget)) {
+				if (usingIntermediate) {
 					try {
-						moveFile(intermediateTarget, tmpTarget)
+						remote.move(intermediateTarget, tmpTarget)
 					} catch {
-						case e: Exception if Files.exists(intermediateTarget) =>
-							Files.delete(intermediateTarget)
+						case e: Exception if local.exists(intermediateTarget) =>
+							local.delete(intermediateTarget)
 							throw e
 					}
 				}
-				moveFile(tmpTarget, target)
+				remote.rename(tmpTarget, target)
 				println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
-					  + s"    Now at: $target")
+					+ s"    Now at: $target")
 				target
 			} recover {
 				case e: ConversionException =>
 					println(s"Conversion failed for: ${f.fullPath}\n"
-						  + s"    Error: ${e.getMessage}")
+						+ s"    Error: ${e.getMessage}")
 					null
 			}
 		}
@@ -144,53 +150,37 @@ object Synchronizer {
 		true
 	}
 
-	def runScript(scriptDir: Path, sourceFile: FileDescription, targetFile: Path, targetMime: String, forwardIO: Boolean): Unit = {
-		val possibleScripts = constructScripts(scriptDir, sourceFile.mime, targetMime).filter(Files.isExecutable)
-		if (possibleScripts.nonEmpty) {
-			val pb = new ProcessBuilder()
-			pb.command(possibleScripts.head.toString, sourceFile.fullPath.toString, targetFile.toString)
-			if (forwardIO) {
-				pb.redirectInput(Redirect.INHERIT)
-				pb.redirectOutput(Redirect.INHERIT)
-				pb.redirectError(Redirect.INHERIT)
-			}
-			val process = pb.start()
-			val status = process.waitFor()
-			if (status != 0) {
-				throw new ConversionException(s"Converter for ${sourceFile.mime} was not successful: $status", sourceFile)
-			}
-		} else {
-			throw new ConversionException(s"Converter for ${sourceFile.mime} not found!", sourceFile)
+	def sync(conf: Config): Boolean = {
+		val mime = new TikaMimeDetector(TikaConfig.getDefaultConfig, !conf.mimeFromExtension, conf.warnWrongExtension)
+		val local = new LocalAdapter(mime)
+		resolveRemoteAdapter(conf, local) match {
+			case Some(remote) => syncFromTo(conf, local, remote)
+			case _ => false
 		}
 	}
 
-	def constructScripts(scriptDir: Path, fromMime: String, toMime: String): Seq[Path] = {
-		val script = scriptDir.resolve(toMime).resolve(fromMime)
-
-		val pathExt = sys.env.getOrElse("PATHEXT", "")
-		if (pathExt.length > 0) {
-			val parent = script.getParent
-			val name = script.getFileName
-			pathExt.split(File.pathSeparatorChar).map(ext => parent.resolve(name + ext)) :+ script
-		} else List(script)
-	}
-
-	private def moveFile(from: Path, to: Path): Unit = {
-		try {
-			// Try an atomic move (rename in Linux) operation
-			Files.move(from, to, StandardCopyOption.ATOMIC_MOVE)
-		} catch {
-			case _: AtomicMoveNotSupportedException =>
-				try {
-					// Try a simple move operation (move in Linux)
-					Files.move(from, to)
-				} catch {
-					case _: FileSystemException =>
-						// Copy the source and delete it afterwards if successful
-						Files.copy(from, to)
-						Files.delete(from)
+	private def runConverter(scriptDir: Path, sourceFile: FileInfo, targetFile: String, targetMime: String, inheritIO: Boolean): Unit = {
+		ShellScript.resolve(scriptDir.resolve(targetMime).resolve(sourceFile.mime), inheritIO) match {
+			case Some(script) =>
+				val status = script.invoke(sourceFile.fullPath, targetFile)
+				if (status != 0) {
+					throw new ConversionException(s"Converter for ${sourceFile.mime} was not successful: $status", sourceFile)
 				}
+			case _ =>
+				throw new ConversionException(s"Converter for ${sourceFile.mime} not found!", sourceFile)
 		}
 	}
 
+	private def resolveRemoteAdapter(conf: Config, localAdapter: LocalAdapter): Option[IOAdapter] = {
+		if (LocalAdapter.isLocal(conf.ioAdapter)) Some(localAdapter)
+		else {
+			val scriptPath = conf.adaptersDir.resolve(conf.ioAdapter)
+			ShellScript.resolve(scriptPath) match {
+				case Some(script) =>
+					val mime = new TikaMimeDetector(TikaConfig.getDefaultConfig, false, conf.warnWrongExtension)
+					Some(new ShellAdapter(mime, script, localAdapter.separator))
+				case _ => None
+			}
+		}
+	}
 }
