@@ -7,15 +7,14 @@ import scopt.{OptionParser, Read}
 import tel.schich.convertedsync.io.LocalAdapter
 import tel.schich.convertedsync.io.LocalAdapter.isLocal
 
-case class Config(source: Path, target: Path,
+case class Config(source: Path, target: String,
                   convertersDir: Path, mime: String,
                   extension: String, purge: Boolean,
                   purgeDifferentMime: Boolean, force: Boolean,
-                  createTarget: Boolean, mimeFromExtension: Boolean,
-                  warnWrongExtension: Boolean, threadCount: Int,
-                  intermediateDir: Option[Path], silenceConverter: Boolean,
-                  lowSpaceThreshold: Double, ioAdapter: String,
-                  adaptersDir: Path)
+                  mimeFromExtension: Boolean, warnWrongExtension: Boolean,
+                  threadCount: Int, intermediateDir: Option[Path],
+                  silenceConverter: Boolean, lowSpaceThreshold: Double,
+                  adapter: String, adaptersDir: Path)
 
 object ArgsParser {
 
@@ -26,12 +25,11 @@ object ArgsParser {
 		null, null,
 		Paths.get("converters"), null,
 		null, purge = false,
-		purgeDifferentMime = false,
-		force = false, createTarget = false,
+		purgeDifferentMime = false, force = false,
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
 		silenceConverter = false, lowSpaceThreshold = 0,
-		ioAdapter = LocalAdapter.name, adaptersDir = Paths.get("adapters")
+		adapter = LocalAdapter.name, adaptersDir = Paths.get("adapters")
 	)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
@@ -42,12 +40,8 @@ object ArgsParser {
 			config.copy(source = path)
 		}
 
-		opt[Path]('t', "target-path") required() valueName "<path>" text "The target path for the synchronization." action { (path, config) =>
+		opt[String]('t', "target-path") required() valueName "<path>" text "The target path for the synchronization." action { (path, config) =>
 			config.copy(target = path)
-		}
-
-		opt[Unit]("create-target") text "Whether to create the target folder." action { (_, config) =>
-			config.copy(createTarget = true)
 		}
 
 		opt[Path]("converters-dir") valueName "<path>" text "The base path of the conversion programs." action { (path, config) =>
@@ -99,7 +93,7 @@ object ArgsParser {
 		}
 
 		opt[String]("io-adapter") text "Use the given IO adapter script" action {(adapter, conf) =>
-			conf.copy(ioAdapter = adapter)
+			conf.copy(adapter = adapter)
 		}
 
 		opt[Path]("adapters-dir") valueName "<path>" text "The base path of the conversion programs." action {(path, conf) =>
@@ -113,7 +107,7 @@ object ArgsParser {
 				failure("A negative amount of threads is not possible!")
 			else if (config.lowSpaceThreshold < 0 || config.lowSpaceThreshold > 1)
 				failure("The free space threshold may not be lower than 0% or higher than 100%.")
-			else if (!isLocal(config.ioAdapter) && (!config.mimeFromExtension || config.intermediateDir.isEmpty))
+			else if (!isLocal(config.adapter) && (!config.mimeFromExtension || config.intermediateDir.isEmpty))
 				failure("IO adapters require file extension based mime detection and an intermediate directory!")
 			else
 				success

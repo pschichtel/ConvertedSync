@@ -54,13 +54,9 @@ object Synchronizer {
 		}
 		println(s"${toProcess.length} source files will be synchronized to the target folder.")
 
-		if (!Files.exists(conf.target)) {
-			if (conf.createTarget) {
-				Files.createDirectories(conf.target)
-			} else {
-				println("Target directory does not exist!")
-				System.exit(1)
-			}
+		if (!remote.exists(conf.target)) {
+			println("Target directory does not exist!")
+			System.exit(1)
 		}
 
 		val scriptDir = conf.convertersDir.toRealPath()
@@ -172,9 +168,9 @@ object Synchronizer {
 	}
 
 	private def resolveRemoteAdapter(conf: Config, localAdapter: LocalAdapter): Option[IOAdapter] = {
-		if (LocalAdapter.isLocal(conf.ioAdapter)) Some(localAdapter)
+		if (LocalAdapter.isLocal(conf.adapter)) Some(localAdapter)
 		else {
-			val scriptPath = conf.adaptersDir.resolve(conf.ioAdapter)
+			val scriptPath = conf.adaptersDir.resolve(conf.adapter)
 			ShellScript.resolve(scriptPath) match {
 				case Some(script) =>
 					val mime = new TikaMimeDetector(TikaConfig.getDefaultConfig, false, conf.warnWrongExtension)
