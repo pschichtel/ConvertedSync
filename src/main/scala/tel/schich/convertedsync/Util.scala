@@ -50,4 +50,6 @@ object Util {
 			case n => path.substring(0, n)
 		}
 	}
+
+	def splitLines(in: String): Seq[String] = in.split("(?:\r\n|\r|\n)", -1)
 }

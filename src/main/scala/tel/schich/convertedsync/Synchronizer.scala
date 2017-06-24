@@ -17,6 +17,12 @@ object Synchronizer {
 	val TempSuffix: String = ".temporary"
 
 	private def syncFromTo(conf: Config, local: IOAdapter, remote: IOAdapter): Boolean = {
+
+		if (!remote.exists(conf.target)) {
+			println("Target directory does not exist!")
+			System.exit(1)
+		}
+
 		println(s"Scanning the source directory: ${conf.source} ...")
 		val (sourceFiles, sourceScanTime) = time(SECONDS) {
 			local.files(conf.source.toString)
@@ -54,11 +60,6 @@ object Synchronizer {
 		}
 		println(s"${toProcess.length} source files will be synchronized to the target folder.")
 
-		if (!remote.exists(conf.target)) {
-			println("Target directory does not exist!")
-			System.exit(1)
-		}
-
 		val scriptDir = conf.convertersDir.toRealPath()
 
 		if (conf.threadCount > 0) {
@@ -86,12 +87,12 @@ object Synchronizer {
 			val usingIntermediate = !intermediateTarget.equals(tmpTarget)
 
 			Future {
-				val dir = Paths.get(target).getParent
-				if (!Files.exists(dir)) {
-					Files.createDirectories(dir)
+				val dir = Util.parentPath(target, remote.separator)
+				if (!remote.exists(dir)) {
+					remote.mkdirs(dir)
 				}
-				val fileStore = Files.getFileStore(dir)
-				val relativeFreeSpace = fileStore.getUsableSpace / fileStore.getTotalSpace.asInstanceOf[Double]
+
+				val relativeFreeSpace = remote.relativeFreeSpace(dir)
 				println("Free space on target file system: %1.2f%%".format(relativeFreeSpace))
 				if (relativeFreeSpace < conf.lowSpaceThreshold) {
 					throw new ConversionException(s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)", f)
@@ -158,7 +159,7 @@ object Synchronizer {
 	private def runConverter(scriptDir: Path, sourceFile: FileInfo, targetFile: String, targetMime: String, inheritIO: Boolean): Unit = {
 		ShellScript.resolve(scriptDir.resolve(targetMime).resolve(sourceFile.mime), inheritIO) match {
 			case Some(script) =>
-				val status = script.invoke(sourceFile.fullPath, targetFile)
+				val status = script.invoke(Array(sourceFile.fullPath, targetFile))
 				if (status != 0) {
 					throw new ConversionException(s"Converter for ${sourceFile.mime} was not successful: $status", sourceFile)
 				}

@@ -57,6 +57,16 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 	override def exists(path: String): Boolean = {
 		Files.exists(Paths.get(path))
 	}
+
+	override def mkdirs(path: String): Boolean = {
+		Files.createDirectories(Paths.get(path))
+		true
+	}
+
+	override def relativeFreeSpace(path: String): Double = {
+		val fileStore = Files.getFileStore(Paths.get(path))
+		fileStore.getUsableSpace / fileStore.getTotalSpace.asInstanceOf[Double]
+	}
 }
 
 object LocalAdapter {

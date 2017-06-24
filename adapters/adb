@@ -1,17 +1,33 @@
 #!/usr/bin/env bash
 
+echo_err()
+{
+    (>&2 echo "$@")
+}
+
 ADB_BIN="${ADB_BIN:-"$(which adb)"}"
 ADB_SELECT_DEVICE="${ADB_SELECT_DEVICE:-""}"
 
 selection=""
 if [[ ! -z "$ADB_SELECT_DEVICE" ]]
 then
-    selection="-s $(adb devices -l | grep -P '\sdevice\s' | grep "$ADB_SELECT_DEVICE" | grep -oP '^\S+')"
+    device_id="$(adb devices -l | grep -P '\sdevice\s' | grep -i "$ADB_SELECT_DEVICE" | grep -oP '^\S+')"
+    if [[ -z "$device_id" ]]
+    then
+        echo_err "Unable to find device '${ADB_SELECT_DEVICE}' !"
+        exit 255
+    fi
+    selection="-s $device_id"
 fi
+
+esc()
+{
+    printf '%q' "$1"
+}
 
 adb_run()
 {
-    "$ADB_BIN" $selection "$@"
+    "$ADB_BIN" ${selection} "$@"
     return $?
 }
 
@@ -30,14 +46,14 @@ adb_push()
 list_files()
 {
     local path="${1?no base path given!}"
-    adb_shell "TZ=UTC find '$path' -type f -exec ls -ao {} \;"
+    adb_shell 'TZ=UTC find '"$(esc "$path")"' -type f -exec ls -ao "{}" \;'
     return $?
 }
 
 rm_file()
 {
     local path="${1?no file path given!}"
-    adb_shell "rm -v '$path'"
+    adb_shell rm "$(esc "$path")"
     return $?
 }
 
@@ -46,11 +62,11 @@ copy_file()
     local from="${1?no local path given!}"
     local to="${2?no remote path given!}"
     adb_push "$from" "$to"
-    result=$?
-    if [[ $result -ne 0 ]]
+    local result=$?
+    if [[ "$result" -ne 0 ]]
     then
         echo_err "Failed to push '${from}' to '${to}'!"
-        return $result
+        return "$result"
     fi
     return 0
 }
@@ -60,10 +76,10 @@ move_file()
     local from="${1?no local path given!}"
     local to="${2?no remote path given!}"
     copy_file "$from" "$to"
-    result=$?
-    if [[ $result -ne 0 ]]
+    local result=$?
+    if [[ "$result" -ne 0 ]]
     then
-        return $result
+        return "$result"
     fi
     rm -v "$from"
     return $?
@@ -73,20 +89,37 @@ rename_file()
 {
     local from="${1?no source path given!}"
     local to="${2?no target path given!}"
-    adb_shell "mv '${from}' '${to}'"
+    adb_shell mv "$(esc "$from")" "$(esc "$to")"
     return $?
 }
 
 file_exists()
 {
     local path="${1?no file path given!}"
-    adb_shell "stat '$path'"
+    adb_shell stat "$(esc "$path")" > /dev/null
     return $?
 }
 
-echo_err()
+mkdirs()
 {
-    (>&2 echo "$@")
+    local path="${1?no file path given!}"
+    adb_shell mkdir -p "$(esc "$path")" > /dev/null
+    return $?
+}
+
+free_space()
+{
+    local path="${1?no file path given!}"
+    local out="$(adb_shell df -k "$(esc "$path")")"
+    local result=$?
+    if [[ "$result" -ne 0 ]]
+    then
+        echo_err "Unable to read free space"
+        return "$result"
+    fi
+    local cells=($(grep '/' <<< "$out"))
+    echo "${cells[3]},${cells[1]}"
+    return $?
 }
 
 command="$1"
@@ -116,8 +149,16 @@ case "$command" in
         file_exists "$@"
         exit $?
         ;;
+    mkdirs)
+        mkdirs "$@"
+        exit $?
+        ;;
+    freespace)
+        free_space "$@"
+        exit $?
+        ;;
     line-pattern)
-        echo '^(?:\S+\s+){4}(\S+\s+\S+)\s(.+)$'
+        echo '^(?:\S+\s+){4}(?<date>\S+\s+\S+)\s(?<path>.+)$'
         exit 0
         ;;
     *)

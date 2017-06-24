@@ -1,15 +1,14 @@
 package tel.schich.convertedsync
 
-import java.io.File
+import java.io.{File, InputStream}
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.{Files, Path}
-import java.util
 
 import scala.io.Source
 
 case class ShellScript(executable: Path, inheritIO: Boolean) {
 
-	private def build(args: Seq[String]): ProcessBuilder = {
+	private def build(args: Seq[String], inheritIO: Boolean): ProcessBuilder = {
 		val command = executable.toString +: args
 		val pb = new ProcessBuilder()
 		pb.command(command:_*)
@@ -19,16 +18,31 @@ case class ShellScript(executable: Path, inheritIO: Boolean) {
 		pb
 	}
 
-	def invoke(args: String*): Int = {
-		build(args).start().waitFor()
+	def invoke(args: Seq[String], inheritIO: Boolean = this.inheritIO): Int = {
+		build(args, inheritIO).start().waitFor()
 	}
 
-	def invokeWithOutput(args: String*): (Int, Iterator[String]) = {
-		val pb = build(args)
+	def invokeAndRead(args: Seq[String], inheritIO: Boolean = this.inheritIO): (Int, String) = {
+		val pb = build(args, inheritIO)
 		pb.redirectOutput(Redirect.PIPE)
 		val proc = pb.start()
-		(proc.waitFor(), Source.fromInputStream(proc.getInputStream).getLines())
+		val stdOut = readOutput(proc.getInputStream)
+		val result = proc.waitFor()
+		(result, stdOut)
 	}
+
+	def invokeAndReadError(args: Seq[String], inheritIO: Boolean = this.inheritIO): (Int, String, String) = {
+		val pb = build(args, inheritIO)
+		pb.redirectOutput(Redirect.PIPE)
+		pb.redirectError(Redirect.PIPE)
+		val proc = pb.start()
+		val stdOut = readOutput(proc.getInputStream)
+		val stdErr = readOutput(proc.getErrorStream)
+		val result = proc.waitFor()
+		(result, stdOut, stdErr)
+	}
+
+	private def readOutput(in: InputStream) = Source.fromInputStream(in).mkString
 }
 
 object ShellScript {
