@@ -1,21 +1,14 @@
 package tel.schich.convertedsync.io
 
 import java.nio.file.attribute.FileTime
-import java.time.format.DateTimeFormatter
-import java.time.{LocalDateTime, ZoneOffset}
+import java.util.concurrent.TimeUnit.SECONDS
 
 import tel.schich.convertedsync.mime.MimeDetector
-import tel.schich.convertedsync.{ConversionException, ShellScript, Util}
-
-import scala.util.matching.Regex
+import tel.schich.convertedsync.{ShellScript, Util}
 
 class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char) extends IOAdapter {
 
 	val DefaultSeparator: Char = '/'
-	val DefaultDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-	val DefaultLineRegex: Regex = "^(?<date>\\S+)\\s(?<path>.+)$".r
-	val LineRegexGroupDate: String = "date"
-	val LineRegexGroupPath: String = "path"
 
 	override lazy val separator: Char = {
 		val (result, out, _) = script.invokeAndReadError(Seq("separator"))
@@ -23,44 +16,36 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 		else DefaultSeparator
 	}
 
-	private lazy val dateFormat = {
-		val (result, out, _) = script.invokeAndReadError(Seq("date-format"))
-		if (result == 0 && out.nonEmpty) DateTimeFormatter.ofPattern(out.trim)
-		else DefaultDateFormatter
-	}
-
-	private lazy val linePattern = {
-		val (result, out, _) = script.invokeAndReadError(Seq("line-pattern"))
-		if (result == 0 && out.nonEmpty) out.trim.r
-		else DefaultLineRegex
-	}
-
 	private def lineToFileInfo(base: String, line: String): Option[FileInfo] = {
-		linePattern.findFirstMatchIn(line).flatMap { m =>
-			val path = m.group(LineRegexGroupPath)
-			val lastModifiedDateString = m.group(LineRegexGroupDate)
-			if (path.isEmpty || lastModifiedDateString.isEmpty) None
-			else {
-				val fileName = Util.fileName(path, separator)
-				val lastModifiedDate = parseLastModDate(lastModifiedDateString)
-				val mimeType = mime.detectMime(path, fileName)
-				val core = extractCore(base, path)
-				Some(FileInfo(path, fileName, core, lastModifiedDate, mimeType))
-			}
+		line.indexOf(',') match {
+			case -1 =>
+				println("Line is not valid:")
+				println(s"   $line")
+				None
+			case n =>
+				if (n == line.length - 1 || n == 0) None
+				else {
+					val path = line.substring(n + 1)
+					val fileName = Util.fileName(path, separator)
+					val lastModifiedDate = parseLastModDate(line.substring(0, n))
+					val mimeType = mime.detectMime(path, fileName)
+					val core = extractCore(base, path)
+					Some(FileInfo(path, fileName, core, lastModifiedDate, mimeType))
+				}
 		}
 	}
 
 	override def files(base: String): Seq[FileInfo] = {
 		script.invokeAndRead(Seq("list", base)) match {
 			case (0, out) =>
-				Util.splitLines(out).flatMap(lineToFileInfo(base, _))
+				Util.splitLines(out).filter(_.nonEmpty).flatMap(lineToFileInfo(base, _))
 			case _ =>
 				Seq.empty
 		}
 	}
 
 	private def parseLastModDate(dateStr: String): FileTime = {
-		FileTime.from(LocalDateTime.parse(dateStr, dateFormat).toInstant(ZoneOffset.UTC))
+		FileTime.from(dateStr.toLong, SECONDS)
 	}
 
 	private def extractCore(base: String, path: String): String = {

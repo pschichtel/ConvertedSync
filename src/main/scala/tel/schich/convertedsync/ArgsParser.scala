@@ -60,7 +60,7 @@ object ArgsParser {
 			config.copy(purge = true)
 		}
 
-		opt[Unit]("purge-different-mime") text "Delete files that are available in the target folder, but not in the source folder." action {(_, config) =>
+		opt[Unit]("purge-different-mime") text "Also delete files in the target folder, that don't have the expected mime type." action {(_, config) =>
 			config.copy(purgeDifferentMime = true)
 		}
 

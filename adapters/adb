@@ -46,7 +46,7 @@ adb_push()
 list_files()
 {
     local path="${1?no base path given!}"
-    adb_shell 'TZ=UTC find '"$(esc "$path")"' -type f -exec ls -ao "{}" \;'
+    adb_shell find "$(esc "$path")" -type f -exec stat -c '%Y,%n' "{}" '\;'
     return $?
 }
 
@@ -156,10 +156,6 @@ case "$command" in
     freespace)
         free_space "$@"
         exit $?
-        ;;
-    line-pattern)
-        echo '^(?:\S+\s+){4}(?<date>\S+\s+\S+)\s(?<path>.+)$'
-        exit 0
         ;;
     *)
         if [[ -z "$command" ]]
