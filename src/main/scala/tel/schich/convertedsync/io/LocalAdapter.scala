@@ -67,6 +67,13 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		val fileStore = Files.getFileStore(Paths.get(path))
 		fileStore.getUsableSpace / fileStore.getTotalSpace.asInstanceOf[Double]
 	}
+
+	override def purgeEmptyFolders(path: String): Boolean = {
+		Files.walk(Paths.get(path))
+			.filter(p => Files.isDirectory(p) && !Files.list(p).findAny().isPresent)
+			.forEach(Files.delete(_))
+		true
+	}
 }
 
 object LocalAdapter {

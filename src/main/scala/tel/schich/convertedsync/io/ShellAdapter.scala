@@ -96,4 +96,8 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 			throw new Exception(s"Unable to parse free space: $stdOut")
 		}
 	}
+
+	override def purgeEmptyFolders(path: String): Boolean = {
+		script.invoke(Seq("purge-empty", path)) == 0
+	}
 }

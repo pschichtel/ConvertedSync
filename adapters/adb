@@ -46,7 +46,7 @@ adb_push()
 list_files()
 {
     local path="${1?no base path given!}"
-    adb_shell find "$(esc "$path")" -type f -exec stat -c '%Y,%n' "{}" '\;'
+    adb_shell find "$(esc "$path")" -type f -exec stat -c '%Y,%n' '"{}"' '\;'
     return $?
 }
 
@@ -81,7 +81,7 @@ move_file()
     then
         return "$result"
     fi
-    rm -v "$from"
+    rm "$from"
     return $?
 }
 
@@ -122,6 +122,13 @@ free_space()
     return $?
 }
 
+purge_empty()
+{
+    local path="${1?no file path given!}"
+    adb_shell find "$(esc "$path")" -type d -depth -exec rmdir '"{}"' '\;' 2> /dev/null
+    return 0
+}
+
 command="$1"
 shift 1
 case "$command" in
@@ -155,6 +162,10 @@ case "$command" in
         ;;
     freespace)
         free_space "$@"
+        exit $?
+        ;;
+    purge-empty)
+        purge_empty "$@"
         exit $?
         ;;
     *)

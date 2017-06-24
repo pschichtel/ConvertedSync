@@ -50,6 +50,7 @@ object Synchronizer {
 				}
 			} else files
 		}
+
 		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
 
 		println("Detecting files to be processed...")
@@ -145,6 +146,12 @@ object Synchronizer {
 		}
 
 		Await.result(Future.sequence(futures), Duration.Inf)
+
+		if (conf.purge) {
+			println("Purge empty directories...")
+			remote.purgeEmptyFolders(conf.target)
+		}
+
 		println("Done!")
 		true
 	}

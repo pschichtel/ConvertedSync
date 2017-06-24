@@ -10,4 +10,5 @@ trait IOAdapter {
 	def exists(path: String): Boolean
 	def mkdirs(path: String): Boolean
 	def relativeFreeSpace(path: String): Double
+	def purgeEmptyFolders(path: String): Boolean
 }
