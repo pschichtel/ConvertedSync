@@ -14,7 +14,8 @@ case class Config(source: Path, target: String,
                   mimeFromExtension: Boolean, warnWrongExtension: Boolean,
                   threadCount: Int, intermediateDir: Option[Path],
                   silenceConverter: Boolean, lowSpaceThreshold: Double,
-                  adapter: String, adaptersDir: Path)
+                  adapter: String, adaptersDir: Path,
+                  fallbackMime: String)
 
 object ArgsParser {
 
@@ -29,7 +30,8 @@ object ArgsParser {
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
 		silenceConverter = false, lowSpaceThreshold = 0,
-		adapter = LocalAdapter.name, adaptersDir = Paths.get("adapters")
+		adapter = LocalAdapter.name, adaptersDir = Paths.get("adapters"),
+		fallbackMime = "application/octet-stream"
 	)
 
 	val parser = new OptionParser[Config]("ConvertedSync") {
@@ -100,15 +102,23 @@ object ArgsParser {
 			conf.copy(adaptersDir = path)
 		}
 
-		checkConfig { config =>
-			if (config.intermediateDir.isDefined && !Files.isDirectory(config.intermediateDir.get))
+		opt[String]("fallback-mime") valueName "<mime/type>" text "Fall back to this mime type if no conversion script was found." action {(mime, conf) =>
+			conf.copy(fallbackMime = mime)
+		}
+
+		checkConfig { conf =>
+			if (conf.intermediateDir.isDefined && !Files.isDirectory(conf.intermediateDir.get))
 				failure("The intermediate directory must exist!")
-			else if (config.threadCount < 0)
+			else if (conf.threadCount < 0)
 				failure("A negative amount of threads is not possible!")
-			else if (config.lowSpaceThreshold < 0 || config.lowSpaceThreshold > 1)
+			else if (conf.lowSpaceThreshold < 0 || conf.lowSpaceThreshold > 1)
 				failure("The free space threshold may not be lower than 0% or higher than 100%.")
-			else if (!isLocal(config.adapter) && (!config.mimeFromExtension || config.intermediateDir.isEmpty))
+			else if (!isLocal(conf.adapter) && (!conf.mimeFromExtension || conf.intermediateDir.isEmpty))
 				failure("IO adapters require file extension based mime detection and an intermediate directory!")
+			else if (!Files.isDirectory(conf.convertersDir))
+				failure("The converters directory does not exist!")
+			else if (!isLocal(conf.adapter) && !Files.isDirectory(conf.adaptersDir))
+				failure("The adapters dir must exist in order to use adapters!")
 			else
 				success
 		}

@@ -8,6 +8,7 @@ import tel.schich.convertedsync.Timing.time
 import tel.schich.convertedsync.io.{FileInfo, IOAdapter, LocalAdapter, ShellAdapter}
 import tel.schich.convertedsync.mime.TikaMimeDetector
 
+import scala.collection.JavaConverters.asScalaIteratorConverter
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -60,14 +61,14 @@ object Synchronizer {
 		}
 		println(s"${toProcess.length} source files will be synchronized to the target folder.")
 
-		val scriptDir = conf.convertersDir.toRealPath()
-
 		if (conf.threadCount > 0) {
 			println(s"Using ${conf.threadCount} thread(s) for the conversion.")
 			for (p <- Seq("minThreads", "numThreads", "maxThreads")) {
 				System.setProperty(s"scala.concurrent.context.$p", "" + conf.threadCount)
 			}
 		}
+
+		val converters = findConverters(conf, local, !conf.silenceConverter)
 
 		val futures = toProcess.map { f =>
 			// the target path
@@ -84,7 +85,9 @@ object Synchronizer {
 				tempFile.toString
 			}.getOrElse(tmpTarget)
 
-			val usingIntermediate = !intermediateTarget.equals(tmpTarget)
+			val intermediateAdapter =
+				if (intermediateTarget.equals(tmpTarget)) remote
+				else local
 
 			Future {
 				val dir = Util.parentPath(target, remote.separator)
@@ -107,21 +110,20 @@ object Synchronizer {
 				if (f.mime == conf.mime && !conf.force) {
 					println("The input file mime type matches the target mime type, copying...")
 					time() {
-						local.copy(f.fullPath, intermediateTarget)
+						intermediateAdapter.copy(f.fullPath, intermediateTarget)
 					}._2
 				} else {
 					val t = time() {
-						runConverter(scriptDir, f, intermediateTarget, conf.mime, !conf.silenceConverter)
+						runConverter(conf, f, intermediateTarget, converters)
 					}._2
 
-					if (!usingIntermediate && !remote.exists(intermediateTarget) ||
-						 usingIntermediate && !local.exists(intermediateTarget)) {
+					if (!intermediateAdapter.exists(intermediateTarget)) {
 						throw new ConversionException(s"Converter did not generate file $intermediateTarget", f)
 					}
 					t
 				}
 			}.map { time =>
-				if (usingIntermediate) {
+				if (intermediateAdapter == local) {
 					try {
 						remote.move(intermediateTarget, tmpTarget)
 					} catch {
@@ -156,8 +158,21 @@ object Synchronizer {
 		}
 	}
 
-	private def runConverter(scriptDir: Path, sourceFile: FileInfo, targetFile: String, targetMime: String, inheritIO: Boolean): Unit = {
-		ShellScript.resolve(scriptDir.resolve(targetMime).resolve(sourceFile.mime), inheritIO) match {
+	private def findConverters(conf: Config, local: IOAdapter, inheritIO: Boolean): Map[String, ShellScript] = {
+		val scripts = Files.walk(conf.convertersDir).iterator().asScala.filter(Files.isExecutable).flatMap { path =>
+			val relativePath = conf.convertersDir.relativize(path).toString
+			relativePath.split(local.separator).toSeq match {
+				case Seq(a, b, c, d) =>
+					Some((s"$a/$b/$c/$d", ShellScript(path, inheritIO)))
+				case _ =>
+					None
+			}
+		}
+		scripts.toMap
+	}
+
+	private def runConverter(conf: Config, sourceFile: FileInfo, targetFile: String, converters: Map[String, ShellScript]): Unit = {
+		lookupScript(converters, sourceFile.mime, conf.mime, conf.fallbackMime) match {
 			case Some(script) =>
 				val status = script.invoke(Array(sourceFile.fullPath, targetFile))
 				if (status != 0) {
@@ -166,6 +181,12 @@ object Synchronizer {
 			case _ =>
 				throw new ConversionException(s"Converter for ${sourceFile.mime} not found!", sourceFile)
 		}
+	}
+
+	private def lookupScript(converters: Map[String, ShellScript], sourceMime: String, targetMime: String, fallbackMime: String): Option[ShellScript] = {
+		Seq(s"$sourceMime/$targetMime", s"$fallbackMime/$targetMime", s"$fallbackMime/$fallbackMime")
+			.find(converters.isDefinedAt)
+			.map(converters)
 	}
 
 	private def resolveRemoteAdapter(conf: Config, localAdapter: LocalAdapter): Option[IOAdapter] = {
