@@ -8,33 +8,37 @@ import tel.schich.convertedsync.io.LocalAdapter
 import tel.schich.convertedsync.io.LocalAdapter.isLocal
 
 case class Config(source: Path, target: String,
-                  convertersDir: Path, mime: String,
-                  extension: String, purge: Boolean,
+                  convertersDir: Path, purge: Boolean,
                   purgeDifferentMime: Boolean, force: Boolean,
                   mimeFromExtension: Boolean, warnWrongExtension: Boolean,
                   threadCount: Int, intermediateDir: Option[Path],
                   silenceConverter: Boolean, lowSpaceThreshold: Double,
                   adapter: String, adaptersDir: Path,
-                  fallbackMime: String)
+                  fallbackMime: String, rules: Seq[ConversionRule])
 
 object ArgsParser {
 
 	implicit val pathRead: Read[Path] = Read.reads(Paths.get(_))
 	implicit val mediaTypeRead: Read[MediaType] = Read.reads(MediaType.parse)
+	implicit val conversionRuleRead: Read[ConversionRule] = Read.reads { s =>
+		ConversionRule.parse(s) match {
+			case Some(rule) => rule
+			case None => throw new IllegalArgumentException("'" + s + "' is not a valid conversion rule.")
+		}
+	}
 
 	val defaults = Config(
 		null, null,
-		Paths.get("converters"), null,
-		null, purge = false,
+		Paths.get("converters"), purge = false,
 		purgeDifferentMime = false, force = false,
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
 		silenceConverter = false, lowSpaceThreshold = 0,
 		adapter = LocalAdapter.name, adaptersDir = Paths.get("adapters"),
-		fallbackMime = "application/octet-stream"
+		fallbackMime = "application/octet-stream", rules = Seq.empty
 	)
 
-	val parser = new OptionParser[Config]("ConvertedSync") {
+	val parser: OptionParser[Config] = new OptionParser[Config]("ConvertedSync") {
 
 		head("ConvertedSync")
 
@@ -48,14 +52,6 @@ object ArgsParser {
 
 		opt[Path]("converters-dir") valueName "<path>" text "The base path of the conversion programs." action { (path, config) =>
 			config.copy(convertersDir = path.toRealPath())
-		}
-
-		opt[String]('e', "target-extension") required() valueName "<extension>" text "The file extension newly converted files should have." action { (extension, config) =>
-			config.copy(extension = extension)
-		}
-
-		opt[MediaType]('m', "target-mime") required() valueName "<mime/type>" text "The target mime-type for the conversion." action { (mime, config) =>
-			config.copy(mime = mime.toString)
 		}
 
 		opt[Unit]("purge") text "Delete files that are available in the target folder, but not in the source folder." action {(_, config) =>
@@ -104,6 +100,10 @@ object ArgsParser {
 
 		opt[String]("fallback-mime") valueName "<mime/type>" text "Fall back to this mime type if no conversion script was found." action {(mime, conf) =>
 			conf.copy(fallbackMime = mime)
+		}
+
+		opt[ConversionRule]("rule") minOccurs 1 valueName "<mime:converter:extension>" text "Defines a conversion rule by source mime, conversion script and target extension." action {(rule, conf) =>
+			conf.copy(rules = conf.rules :+ rule)
 		}
 
 		checkConfig { conf =>

@@ -4,11 +4,11 @@ import java.nio.file._
 import java.util.concurrent.TimeUnit.SECONDS
 
 import org.apache.tika.config.TikaConfig
+import tel.schich.convertedsync.ConversionRule.findRule
 import tel.schich.convertedsync.Timing.time
 import tel.schich.convertedsync.io.{FileInfo, IOAdapter, LocalAdapter, ShellAdapter}
 import tel.schich.convertedsync.mime.TikaMimeDetector
 
-import scala.collection.JavaConverters.asScalaIteratorConverter
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -37,18 +37,18 @@ object Synchronizer {
 		println(s"Scanning the target directory: ${conf.target} ...")
 		val (targetFiles, targetScanTime) = time(SECONDS) {
 
-			val files = remote.files(conf.target.toString).map(x => (x.core, x)).toMap
+			val existingFiles = remote.files(conf.target.toString).map(x => (x.core, x)).toMap
 
 			if (conf.purge) {
-				val sourceLookup = sourceFiles.map(_.core).toSet
-				files.filter { case (relative, file) =>
-					if (!sourceLookup.contains(relative) || conf.purgeDifferentMime && conf.mime != file.mime) {
-						remote.delete(file.fullPath)
-						println(s"Purged ${file.fullPath} (${file.mime})")
+				val sourceLookup = sourceFiles.map(f => (f.core, f)).toMap
+				existingFiles.filter { case (core, existingFile) =>
+					if (!sourceLookup.contains(core) || conf.purgeDifferentMime && conflictingMimes(conf.rules, sourceLookup(core), existingFile)) {
+						remote.delete(existingFile.fullPath)
+						println(s"Purged ${existingFile.fullPath} (${existingFile.mime})")
 						false
 					} else true
 				}
-			} else files
+			} else existingFiles
 		}
 
 		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
@@ -60,7 +60,6 @@ object Synchronizer {
 				target.lastModified.compareTo(f.lastModified) < 0
 			} else true
 		}
-		println(s"${toProcess.length} source files will be synchronized to the target folder.")
 
 		if (conf.threadCount > 0) {
 			println(s"Using ${conf.threadCount} thread(s) for the conversion.")
@@ -69,11 +68,22 @@ object Synchronizer {
 			}
 		}
 
-		val converters = findConverters(conf, local, !conf.silenceConverter)
+		val convertibleFiles = toProcess.flatMap { f =>
+			findRule(f.mime, conf.rules) match {
+				case Some(rule) =>
+					Some((f, rule))
+				case None =>
+					println(s"No applicable conversion rule for file: ${f.fullPath} (${f.mime})")
+					None
+			}
+		}
 
-		val futures = toProcess.map { f =>
+		println(s"${convertibleFiles.length} source files will be synchronized to the target folder.")
+
+		val futures = convertibleFiles.map { case (f, rule) =>
+
 			// the target path
-			val target = conf.target.toString + local.separator + f.core + '.' + conf.extension
+			val target = conf.target.toString + local.separator + f.core + '.' + rule.extension
 			// a temporary target path on the same file system as the target path
 			val tmpTarget = target + TempSuffix
 			// an intermediate target path on an arbitrary file system
@@ -108,14 +118,14 @@ object Synchronizer {
 					throw new ConversionException("The file was queued for conversion, but disappeared!", f)
 				}
 
-				if (f.mime == conf.mime && !conf.force) {
+				if (f.mime == rule.targetMime && !conf.force) {
 					println("The input file mime type matches the target mime type, copying...")
 					time() {
 						intermediateAdapter.copy(f.fullPath, intermediateTarget)
 					}._2
 				} else {
 					val t = time() {
-						runConverter(conf, f, intermediateTarget, converters)
+						runConverter(conf, f, intermediateTarget, rule)
 					}._2
 
 					if (!intermediateAdapter.exists(intermediateTarget)) {
@@ -165,21 +175,14 @@ object Synchronizer {
 		}
 	}
 
-	private def findConverters(conf: Config, local: IOAdapter, inheritIO: Boolean): Map[String, ShellScript] = {
-		val scripts = Files.walk(conf.convertersDir).iterator().asScala.filter(Files.isExecutable).flatMap { path =>
-			val relativePath = conf.convertersDir.relativize(path).toString
-			relativePath.split(local.separator).toSeq match {
-				case Seq(a, b, c, d) =>
-					Some((s"$a/$b/$c/$d", ShellScript(path, inheritIO)))
-				case _ =>
-					None
-			}
-		}
-		scripts.toMap
+	private def conflictingMimes(rules: Seq[ConversionRule], sourceFile: FileInfo, existingFile: FileInfo) = {
+		findRule(sourceFile.mime, rules)
+			.forall(r => !r.targetMime.equalsIgnoreCase(existingFile.mime))
 	}
 
-	private def runConverter(conf: Config, sourceFile: FileInfo, targetFile: String, converters: Map[String, ShellScript]): Unit = {
-		lookupScript(converters, sourceFile.mime, conf.mime, conf.fallbackMime) match {
+	private def runConverter(conf: Config, sourceFile: FileInfo, targetFile: String, rule: ConversionRule): Unit = {
+
+		ShellScript.resolve(conf.convertersDir.resolve(rule.converter), !conf.silenceConverter) match {
 			case Some(script) =>
 				println(s"Applying converter: ${script.executable}")
 				val status = script.invoke(Array(sourceFile.fullPath, targetFile))
@@ -189,12 +192,6 @@ object Synchronizer {
 			case _ =>
 				throw new ConversionException(s"Converter for ${sourceFile.mime} not found!", sourceFile)
 		}
-	}
-
-	private def lookupScript(converters: Map[String, ShellScript], sourceMime: String, targetMime: String, fallbackMime: String): Option[ShellScript] = {
-		Seq(s"$sourceMime/$targetMime", s"$fallbackMime/$targetMime", s"$fallbackMime/$fallbackMime")
-			.find(converters.isDefinedAt)
-			.map(converters)
 	}
 
 	private def resolveRemoteAdapter(conf: Config, localAdapter: LocalAdapter): Option[IOAdapter] = {
