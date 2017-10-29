@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+source="$1"
+target="$2"
+
+# loudnorm <file> <integrated> <true peak> <loudness range>
+loudnorm() {
+    local file="$1"
+    local target_i="$2"
+    local target_tp="$3"
+    local target_lra="$4"
+
+    local target="I=${target_i}:TP=${target_tp}:LRA=${target_lra}"
+    local output="$(ffmpeg -hide_banner -i "$file" -af loudnorm="$target":print_format=json -f null - 2>&1)"
+    if [[ $? != 0 ]]
+    then
+        return 1
+    fi
+    local results="$(tail -n 12 <<< "$output")"
+    local measured_i measured_lra measured_tp measured_thresh target_offset
+    measured_i="$(jq -r .input_i <<< "$results")"
+    if [[ $? != 0 ]]
+    then
+        echo "$results" >&2
+        return 1
+    fi
+    measured_lra="$(jq -r .input_lra <<< "$results")"
+    if [[ $? != 0 ]]
+    then
+        echo "$results" >&2
+        return 1
+    fi
+    measured_tp="$(jq -r .input_tp <<< "$results")"
+    if [[ $? != 0 ]]
+    then
+        echo "$results" >&2
+        return 1
+    fi
+    measured_thresh="$(jq -r .input_thresh <<< "$results")"
+    if [[ $? != 0 ]]
+    then
+        echo "$results" >&2
+        return 1
+    fi
+    target_offset="$(jq -r .target_offset <<< "$results")"
+    if [[ $? != 0 ]]
+    then
+        echo "$results" >&2
+        return 1
+    fi
+
+    local measured="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}:measured_thresh=${measured_thresh}:offset=${target_offset}"
+
+    echo -n "loudnorm=${target}:${measured}:linear=true:print_format=summary"
+}
+
+target_i="-16"
+target_tp="-1.5"
+target_lra="11"
+
+loudnorm_filter="$(loudnorm "$source" "$target_i" "$target_tp" "$target_lra")"
+if [[ $? != 0 ]]
+then
+    echo "Failed to analyse loudness!"
+    exit 1
+fi
+
+
+# explicit output format like "-f mp3" is required as the conversion target will be a temp file.
+ffmpeg -y -i "$source" -codec:a libmp3lame -q:a 2 -af "$loudnorm_filter" -c:v copy -map_metadata 0 -id3v2_version 3 -f mp3 "$target"
