@@ -181,6 +181,7 @@ object Synchronizer {
 	private def runConverter(conf: Config, sourceFile: FileInfo, targetFile: String, converters: Map[String, ShellScript]): Unit = {
 		lookupScript(converters, sourceFile.mime, conf.mime, conf.fallbackMime) match {
 			case Some(script) =>
+				println(s"Applying converter: ${script.executable}")
 				val status = script.invoke(Array(sourceFile.fullPath, targetFile))
 				if (status != 0) {
 					throw new ConversionException(s"Converter for ${sourceFile.mime} was not successful: $status", sourceFile)
