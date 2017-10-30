@@ -4,8 +4,6 @@ import java.nio.file.{Files, Path, Paths}
 
 import org.apache.tika.mime.MediaType
 import scopt.{OptionParser, Read}
-import tel.schich.convertedsync.io.LocalAdapter
-import tel.schich.convertedsync.io.LocalAdapter.isLocal
 
 case class Config(source: Path, target: String,
                   convertersDir: Path, purge: Boolean,
@@ -13,8 +11,7 @@ case class Config(source: Path, target: String,
                   mimeFromExtension: Boolean, warnWrongExtension: Boolean,
                   threadCount: Int, intermediateDir: Option[Path],
                   silenceConverter: Boolean, lowSpaceThreshold: Double,
-                  adapter: String, adaptersDir: Path,
-                  fallbackMime: String, rules: Seq[ConversionRule])
+                  adapter: Option[Path], rules: Seq[ConversionRule])
 
 object ArgsParser {
 
@@ -34,8 +31,7 @@ object ArgsParser {
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
 		silenceConverter = false, lowSpaceThreshold = 0,
-		adapter = LocalAdapter.name, adaptersDir = Paths.get("adapters"),
-		fallbackMime = "application/octet-stream", rules = Seq.empty
+		adapter = None, rules = Seq.empty
 	)
 
 	val parser: OptionParser[Config] = new OptionParser[Config]("ConvertedSync") {
@@ -90,19 +86,11 @@ object ArgsParser {
 			config.copy(lowSpaceThreshold = i / 100d)
 		}
 
-		opt[String]("io-adapter") text "Use the given IO adapter script" action {(adapter, conf) =>
-			conf.copy(adapter = adapter)
+		opt[Path]("io-adapter") valueName "<path>" text "Use the given IO adapter executable. This option implied --mime-from-extension." action {(adapter, conf) =>
+			conf.copy(adapter = Some(adapter), mimeFromExtension = true)
 		}
 
-		opt[Path]("adapters-dir") valueName "<path>" text "The base path of the conversion programs." action {(path, conf) =>
-			conf.copy(adaptersDir = path)
-		}
-
-		opt[String]("fallback-mime") valueName "<mime/type>" text "Fall back to this mime type if no conversion script was found." action {(mime, conf) =>
-			conf.copy(fallbackMime = mime)
-		}
-
-		opt[ConversionRule]("rule") minOccurs 1 valueName "<mime:converter:extension>" text "Defines a conversion rule by source mime, conversion script and target extension." action {(rule, conf) =>
+		opt[ConversionRule]("rule") minOccurs 1 valueName "<source mime:target mime:converter:extension>" text "Defines a conversion rule by source mime, conversion script and target extension." action {(rule, conf) =>
 			conf.copy(rules = conf.rules :+ rule)
 		}
 
@@ -113,11 +101,11 @@ object ArgsParser {
 				failure("A negative amount of threads is not possible!")
 			else if (conf.lowSpaceThreshold < 0 || conf.lowSpaceThreshold > 1)
 				failure("The free space threshold may not be lower than 0% or higher than 100%.")
-			else if (!isLocal(conf.adapter) && (!conf.mimeFromExtension || conf.intermediateDir.isEmpty))
-				failure("IO adapters require file extension based mime detection and an intermediate directory!")
+			else if (conf.adapter.isEmpty && conf.intermediateDir.isEmpty)
+				failure("IO adapters require an intermediate directory!")
 			else if (!Files.isDirectory(conf.convertersDir))
 				failure("The converters directory does not exist!")
-			else if (!isLocal(conf.adapter) && !Files.isDirectory(conf.adaptersDir))
+			else if (conf.adapter.isDefined && !Files.isExecutable(conf.adapter.get))
 				failure("The adapters dir must exist in order to use adapters!")
 			else
 				success

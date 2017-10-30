@@ -195,15 +195,15 @@ object Synchronizer {
 	}
 
 	private def resolveRemoteAdapter(conf: Config, localAdapter: LocalAdapter): Option[IOAdapter] = {
-		if (LocalAdapter.isLocal(conf.adapter)) Some(localAdapter)
-		else {
-			val scriptPath = conf.adaptersDir.resolve(conf.adapter)
-			ShellScript.resolve(scriptPath) match {
-				case Some(script) =>
-					val mime = new TikaMimeDetector(TikaConfig.getDefaultConfig, false, conf.warnWrongExtension)
-					Some(new ShellAdapter(mime, script, localAdapter.separator))
-				case _ => None
-			}
+		conf.adapter match {
+			case Some(path) =>
+				ShellScript.resolve(path) match {
+					case Some(script) =>
+						val mime = new TikaMimeDetector(TikaConfig.getDefaultConfig, false, conf.warnWrongExtension)
+						Some(new ShellAdapter(mime, script, localAdapter.separator))
+					case _ => None
+				}
+			case None => Some(localAdapter)
 		}
 	}
 }
