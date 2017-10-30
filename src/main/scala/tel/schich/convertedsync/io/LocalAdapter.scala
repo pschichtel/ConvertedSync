@@ -75,9 +75,3 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		true
 	}
 }
-
-object LocalAdapter {
-	val name = "local"
-
-	def isLocal(name: String): Boolean = this.name.equalsIgnoreCase(name)
-}
