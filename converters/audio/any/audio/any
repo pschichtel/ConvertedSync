@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-
-source="$1"
-target="$2"
-
-# explicit output format like "-f mp3" is required as the conversion target will be a temp file.
-ffmpeg -y -i "$source" ${FFMPEG_OPTIONS} "$target"
