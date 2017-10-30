@@ -17,8 +17,8 @@ then
     return 1
 fi
 results="$(tail -n 12 <<< "$output")"
-echo "Analysis results:"
-echo "$results"
+#echo "Analysis results:"
+#echo "$results"
 measured_i="$(jq -r .input_i <<< "$results")"
 if [[ $? != 0 ]]
 then
@@ -49,4 +49,4 @@ measured="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${me
 loudnorm_filter="loudnorm=${norm_targets}:${measured}:linear=true"
 
 # explicit output format like "-f mp3" is required as the conversion target will be a temp file.
-ffmpeg -y -i "$source" -hide_banner -loglevel warning -codec:a libmp3lame -q:a 2 -filter:a "$loudnorm_filter" -codec:v copy -map_metadata 0 -id3v2_version 3 -write_id3v1 1 -f mp3 "$target"
+ffmpeg -y -i "$source" -hide_banner -loglevel warning -codec:a libmp3lame -q:a 2 -filter:a "$loudnorm_filter" -codec:v copy -map_metadata 0 -f mp3 -id3v2_version 4 -write_id3v1 1 "$target"
