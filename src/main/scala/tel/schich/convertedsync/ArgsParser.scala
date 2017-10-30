@@ -90,7 +90,7 @@ object ArgsParser {
 			conf.copy(adapter = Some(adapter), mimeFromExtension = true)
 		}
 
-		opt[ConversionRule]("rule") minOccurs 1 valueName "<source mime:target mime:converter:extension>" text "Defines a conversion rule by source mime, conversion script and target extension." action {(rule, conf) =>
+		opt[ConversionRule]("rule") minOccurs 1 valueName "<source mime:target mime:extension:converter>" text "Defines a conversion rule by source mime, conversion script and target extension." action {(rule, conf) =>
 			conf.copy(rules = conf.rules :+ rule)
 		}
 
@@ -105,8 +105,6 @@ object ArgsParser {
 				failure("IO adapters require an intermediate directory!")
 			else if (!Files.isDirectory(conf.convertersDir))
 				failure("The converters directory does not exist!")
-			else if (conf.adapter.isDefined && !Files.isExecutable(conf.adapter.get))
-				failure("The adapters dir must exist in order to use adapters!")
 			else
 				success
 		}

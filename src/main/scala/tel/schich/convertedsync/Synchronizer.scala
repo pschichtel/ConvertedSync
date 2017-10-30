@@ -170,8 +170,11 @@ object Synchronizer {
 		val mime = new TikaMimeDetector(TikaConfig.getDefaultConfig, !conf.mimeFromExtension, conf.warnWrongExtension)
 		val local = new LocalAdapter(mime)
 		resolveRemoteAdapter(conf, local) match {
-			case Some(remote) => syncFromTo(conf, local, remote)
-			case _ => false
+			case Some(remote) =>
+				syncFromTo(conf, local, remote)
+			case _ =>
+				System.err.println("The given IO adapter could not be resolved.")
+				false
 		}
 	}
 

@@ -1,14 +1,14 @@
 package tel.schich.convertedsync
 
-case class ConversionRule(sourceMime: String, targetMime: String, converter: String, extension: String) {
+case class ConversionRule(sourceMime: String, targetMime: String, extension: String, converter: String) {
 	def matches(mime: String): Boolean = ConversionRule.matchMime(mime, sourceMime)
 }
 
 object ConversionRule {
 	def parse(rule: String): Option[ConversionRule] = {
 		rule.split(':') match {
-			case Array(sourceMime, targetMime, converter, extension) =>
-				Some(ConversionRule(sourceMime, targetMime, converter, extension))
+			case Array(sourceMime, targetMime, extension, converter) =>
+				Some(ConversionRule(sourceMime, targetMime, extension, converter))
 			case _ =>
 				None
 		}
