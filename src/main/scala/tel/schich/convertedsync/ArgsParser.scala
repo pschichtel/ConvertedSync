@@ -95,8 +95,8 @@ object ArgsParser {
 		}
 
 		checkConfig { conf =>
-			if (conf.intermediateDir.isDefined && !Files.isDirectory(conf.intermediateDir.get))
-				failure("The intermediate directory must exist!")
+			if (conf.intermediateDir.isDefined && !Files.isWritable(conf.intermediateDir.get))
+				failure("The intermediate directory must exist and must be writable!")
 			else if (conf.threadCount < 0)
 				failure("A negative amount of threads is not possible!")
 			else if (conf.lowSpaceThreshold < 0 || conf.lowSpaceThreshold > 1)
