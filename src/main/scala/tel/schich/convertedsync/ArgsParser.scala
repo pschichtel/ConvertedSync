@@ -11,7 +11,8 @@ case class Config(source: Path, target: String,
                   mimeFromExtension: Boolean, warnWrongExtension: Boolean,
                   threadCount: Int, intermediateDir: Option[Path],
                   silenceConverter: Boolean, lowSpaceThreshold: Double,
-                  adapter: Option[Path], rules: Seq[ConversionRule])
+                  adapter: Option[Path], rules: Seq[ConversionRule],
+                  reEncodeAll: Boolean)
 
 object ArgsParser {
 
@@ -31,7 +32,8 @@ object ArgsParser {
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
 		silenceConverter = false, lowSpaceThreshold = 0,
-		adapter = None, rules = Seq.empty
+		adapter = None, rules = Seq.empty,
+		reEncodeAll = false
 	)
 
 	val parser: OptionParser[Config] = new OptionParser[Config]("ConvertedSync") {
@@ -46,6 +48,10 @@ object ArgsParser {
 			config.copy(target = path)
 		}
 
+		opt[Unit]("re-encode-all") text "Re-encode already existing files in the target directory." action { (_, config) =>
+			config.copy(reEncodeAll = true)
+		}
+
 		opt[Path]("converters-dir") valueName "<path>" text "The base path of the conversion programs." action { (path, config) =>
 			config.copy(convertersDir = path.toRealPath())
 		}
@@ -58,7 +64,7 @@ object ArgsParser {
 			config.copy(purgeDifferentMime = true)
 		}
 
-		opt[Unit]('f', "force") text "Force conversion even if the mime-type of source and target match." action {(_, config) =>
+		opt[Unit]("force") text "Force conversion even if the mime-type of source and target match." action {(_, config) =>
 			config.copy(force = true)
 		}
 

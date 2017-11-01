@@ -53,13 +53,17 @@ object Synchronizer {
 
 		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
 
-		println("Detecting files to be processed...")
-		val toProcess = sourceFiles.filter { f =>
-			if (targetFiles.contains(f.core)) {
-				val target = targetFiles(f.core)
-				target.lastModified.compareTo(f.lastModified) < 0
-			} else true
-		}
+		val toProcess =
+			if (conf.reEncodeAll) sourceFiles
+			else {
+				println("Detecting files to be processed...")
+				sourceFiles.filter { f =>
+					if (targetFiles.contains(f.core)) {
+						val target = targetFiles(f.core)
+						target.lastModified.compareTo(f.lastModified) < 0
+					} else true
+				}
+			}
 
 		if (conf.threadCount > 0) {
 			println(s"Using ${conf.threadCount} thread(s) for the conversion.")
