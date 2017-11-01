@@ -9,6 +9,7 @@ target_lra="11"
 
 norm_targets="I=${target_i}:TP=${target_tp}:LRA=${target_lra}"
 
+echo "Measuring loudness..."
 output="$(ffmpeg -hide_banner -loglevel info -i "$source" -filter:a loudnorm="$norm_targets":print_format=json -f null - 2>&1)"
 if [[ $? != 0 ]]
 then
@@ -48,5 +49,6 @@ fi
 measured="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}:measured_thresh=${measured_thresh}:offset=${target_offset}"
 loudnorm_filter="loudnorm=${norm_targets}:${measured}:linear=true"
 
+echo "Transcoding..."
 # explicit output format like "-f mp3" is required as the conversion target will be a temp file.
 ffmpeg -y -i "$source" -hide_banner -loglevel warning -codec:a libmp3lame -q:a 2 -filter:a "$loudnorm_filter" -codec:v copy -map_metadata 0 -f mp3 -id3v2_version 4 -write_id3v1 1 "$target"
