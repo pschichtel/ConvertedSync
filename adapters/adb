@@ -39,7 +39,7 @@ adb_shell()
 
 adb_push()
 {
-    adb_run push "$@"
+    adb_run push "$@" > /dev/null
     return $?
 }
 
