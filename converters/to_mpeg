@@ -3,6 +3,8 @@
 source="$1"
 target="$2"
 
+mp3_quality="${MP3_QUALITY:-2}"
+
 target_i="-16"
 target_tp="-1.5"
 target_lra="11"
@@ -51,4 +53,4 @@ loudnorm_filter="loudnorm=${norm_targets}:${measured}:linear=true"
 
 echo "Transcoding..."
 # explicit output format like "-f mp3" is required as the conversion target will be a temp file.
-ffmpeg -y -i "$source" -hide_banner -loglevel warning -codec:a libmp3lame -q:a 1 -filter:a "$loudnorm_filter" -codec:v copy -map_metadata 0 -f mp3 -id3v2_version 4 -write_id3v1 1 "$target"
+ffmpeg -y -i "$source" -hide_banner -loglevel warning -codec:a libmp3lame -q:a "${mp3_quality}" -filter:a "$loudnorm_filter" -codec:v copy -map_metadata 0 -f mp3 -id3v2_version 4 -write_id3v1 1 "$target"
