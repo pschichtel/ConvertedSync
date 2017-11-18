@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+source="$1"
+target="$2"
+
+mp3_quality="${MP3_QUALITY:-2}"
+
+# explicit output format like "-f mp3" is required as the conversion target will be a temp file.
+ffmpeg -y -i "$source" -hide_banner -loglevel warning -codec:a libmp3lame -q:a "${mp3_quality}" -codec:v copy -map_metadata 0 -f mp3 -id3v2_version 4 -write_id3v1 1 "$target"
