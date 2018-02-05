@@ -109,17 +109,20 @@ mkdirs()
 
 free_space()
 {
+    local result
     local path="${1?no file path given!}"
     local out="$(adb_shell df -k "$(esc "$path")")"
-    local result=$?
+    result=$?
     if [[ "$result" -ne 0 ]]
     then
         echo_err "Unable to read free space"
         return "$result"
     fi
-    local cells=($(grep '/' <<< "$out"))
+    local cells
+    cells=($(grep '/' <<< "$out"))
+    result=$?
     echo "${cells[3]},${cells[1]}"
-    return $?
+    return "$result"
 }
 
 purge_empty()
