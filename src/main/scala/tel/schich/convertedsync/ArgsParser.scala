@@ -96,7 +96,7 @@ object ArgsParser {
 			conf.copy(adapter = Some(adapter), mimeFromExtension = true)
 		}
 
-		opt[ConversionRule]("rule") minOccurs 1 valueName "<source mime:target mime:extension:converter>" text "Defines a conversion rule by source mime, conversion script and target extension." action {(rule, conf) =>
+		opt[ConversionRule]("rule") minOccurs 1 unbounded() valueName "<source mime:target mime:extension:converter>" text "Defines a conversion rule by source mime, conversion script and target extension." action {(rule, conf) =>
 			conf.copy(rules = conf.rules :+ rule)
 		}
 
