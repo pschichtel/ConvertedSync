@@ -10,7 +10,7 @@ class ConversionException(message: String, val source: FileInfo) extends Excepti
 object Main extends App {
 	Locale.setDefault(Locale.ENGLISH)
 
-	ArgsParser.parse(args) match {
+	Config.parse(args) match {
 		case Some(conf) =>
 			if (Synchronizer.sync(conf)) {
 				println("Successfully converted all outdated or missing files!")

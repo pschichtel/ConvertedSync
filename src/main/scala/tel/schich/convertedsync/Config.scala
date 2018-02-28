@@ -14,7 +14,7 @@ case class Config(source: Path, target: String,
                   adapter: Option[Path], rules: Seq[ConversionRule],
                   reEncodeAll: Boolean)
 
-object ArgsParser {
+object Config {
 
 	implicit val pathRead: Read[Path] = Read.reads(Paths.get(_))
 	implicit val mediaTypeRead: Read[MediaType] = Read.reads(MediaType.parse)
@@ -92,7 +92,7 @@ object ArgsParser {
 			config.copy(lowSpaceThreshold = i / 100d)
 		}
 
-		opt[Path]("io-adapter") valueName "<path>" text "Use the given IO adapter executable. This option implied --mime-from-extension." action {(adapter, conf) =>
+		opt[Path]("io-adapter") valueName "<path>" text "Use the given IO adapter executable. This option implies --mime-from-extension." action {(adapter, conf) =>
 			conf.copy(adapter = Some(adapter), mimeFromExtension = true)
 		}
 
@@ -107,7 +107,7 @@ object ArgsParser {
 				failure("A negative amount of threads is not possible!")
 			else if (conf.lowSpaceThreshold < 0 || conf.lowSpaceThreshold > 1)
 				failure("The free space threshold may not be lower than 0% or higher than 100%.")
-			else if (conf.adapter.isEmpty && conf.intermediateDir.isEmpty)
+			else if (conf.adapter.nonEmpty && conf.intermediateDir.isEmpty)
 				failure("IO adapters require an intermediate directory!")
 			else if (!Files.isDirectory(conf.convertersDir))
 				failure("The converters directory does not exist!")
