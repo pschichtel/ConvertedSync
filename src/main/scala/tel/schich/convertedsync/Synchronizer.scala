@@ -84,80 +84,7 @@ object Synchronizer {
 
 		println(s"${convertibleFiles.length} source files will be synchronized to the target folder.")
 
-		val futures = convertibleFiles.map { case (f, rule) =>
-
-			// the target path
-			val target = conf.target.toString + local.separator + f.core + '.' + rule.extension
-			// a temporary target path on the same file system as the target path
-			val tmpTarget = target + TempSuffix
-			// an intermediate target path on an arbitrary file system
-			val intermediateTarget = conf.intermediateDir.map {d =>
-				val fileName = f.fileName
-				val tempFile = Files.createTempFile(d, "intermediate_", s"_$fileName")
-				if (Files.exists(tempFile)) {
-					Files.delete(tempFile)
-				}
-				tempFile.toString
-			}.getOrElse(tmpTarget)
-
-			val intermediateAdapter =
-				if (intermediateTarget.equals(tmpTarget)) remote
-				else local
-
-			Future {
-				val dir = Util.parentPath(target, remote.separator)
-				if (!remote.exists(dir)) {
-					remote.mkdirs(dir)
-				}
-
-				val relativeFreeSpace = remote.relativeFreeSpace(dir)
-				println("Free space on target file system: %1.2f%%".format(relativeFreeSpace))
-				if (relativeFreeSpace < conf.lowSpaceThreshold) {
-					throw new ConversionException(s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)", f)
-				}
-
-				val fullPath = Paths.get(f.fullPath)
-
-				if (!Files.exists(fullPath)) {
-					throw new ConversionException("The file was queued for conversion, but disappeared!", f)
-				}
-
-				if (f.mime == rule.targetMime && !conf.force) {
-					println("The input file mime type matches the target mime type, copying...")
-					time() {
-						intermediateAdapter.copy(f.fullPath, intermediateTarget)
-					}._2
-				} else {
-					val t = time() {
-						runConverter(conf, f, intermediateTarget, rule)
-					}._2
-
-					if (!intermediateAdapter.exists(intermediateTarget)) {
-						throw new ConversionException(s"Converter did not generate file $intermediateTarget", f)
-					}
-					t
-				}
-			}.map { time =>
-				if (intermediateAdapter == local) {
-					try {
-						remote.move(intermediateTarget, tmpTarget)
-					} catch {
-						case e: Exception if local.exists(intermediateTarget) =>
-							local.delete(intermediateTarget)
-							throw e
-					}
-				}
-				remote.rename(tmpTarget, target)
-				println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
-					+ s"    Now at: $target")
-				target
-			} recover {
-				case e: ConversionException =>
-					println(s"Conversion failed for: ${f.fullPath}\n"
-						+ s"    Error: ${e.getMessage}")
-					null
-			}
-		}
+		val futures = convertibleFiles.map((convert(conf, local, remote) _).tupled)
 
 		Await.result(Future.sequence(futures), Duration.Inf)
 
@@ -168,6 +95,81 @@ object Synchronizer {
 
 		println("Done!")
 		true
+	}
+
+	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(f: FileInfo, rule: ConversionRule): Future[String] = {
+
+		// the target path
+		val target = conf.target.toString + local.separator + f.core + '.' + rule.extension
+		// a temporary target path on the same file system as the target path
+		val tmpTarget = target + TempSuffix
+		// an intermediate target path on an arbitrary file system
+		val intermediateTarget = conf.intermediateDir.map {d =>
+			val fileName = f.fileName
+			val tempFile = Files.createTempFile(d, "intermediate_", s"_$fileName")
+			if (Files.exists(tempFile)) {
+				Files.delete(tempFile)
+			}
+			tempFile.toString
+		}.getOrElse(tmpTarget)
+
+		val intermediateAdapter =
+			if (intermediateTarget.equals(tmpTarget)) remote
+			else local
+
+		Future {
+			val dir = Util.parentPath(target, remote.separator)
+			if (!remote.exists(dir)) {
+				remote.mkdirs(dir)
+			}
+
+			val relativeFreeSpace = remote.relativeFreeSpace(dir)
+			println("Free space on target file system: %1.2f%%".format(relativeFreeSpace))
+			if (relativeFreeSpace < conf.lowSpaceThreshold) {
+				throw new ConversionException(s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)", f)
+			}
+
+			val fullPath = Paths.get(f.fullPath)
+
+			if (!Files.exists(fullPath)) {
+				throw new ConversionException("The file was queued for conversion, but disappeared!", f)
+			}
+
+			if (f.mime == rule.targetMime && !conf.force) {
+				println("The input file mime type matches the target mime type, copying...")
+				time() {
+					intermediateAdapter.copy(f.fullPath, intermediateTarget)
+				}._2
+			} else {
+				val t = time() {
+					runConverter(conf, f, intermediateTarget, rule)
+				}._2
+
+				if (!intermediateAdapter.exists(intermediateTarget)) {
+					throw new ConversionException(s"Converter did not generate file $intermediateTarget", f)
+				}
+				t
+			}
+		}.map { time =>
+			if (intermediateAdapter == local) {
+				try {
+					remote.move(intermediateTarget, tmpTarget)
+				} catch {
+					case e: Exception if local.exists(intermediateTarget) =>
+						local.delete(intermediateTarget)
+						throw e
+				}
+			}
+			remote.rename(tmpTarget, target)
+			println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
+				+ s"    Now at: $target")
+			target
+		} recover {
+			case e: ConversionException =>
+				println(s"Conversion failed for: ${f.fullPath}\n"
+					+ s"    Error: ${e.getMessage}")
+				null
+		}
 	}
 
 	def sync(conf: Config): Boolean = {
