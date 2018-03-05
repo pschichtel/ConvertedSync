@@ -30,7 +30,8 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 					val lastModifiedDate = parseLastModDate(line.substring(0, n))
 					val mimeType = mime.detectMime(path, fileName)
 					val core = extractCore(base, path)
-					Some(FileInfo(path, fileName, core, lastModifiedDate, mimeType))
+					// TODO optionally support the previous core
+					Some(FileInfo(path, fileName, core, None, lastModifiedDate, mimeType))
 				}
 		}
 	}

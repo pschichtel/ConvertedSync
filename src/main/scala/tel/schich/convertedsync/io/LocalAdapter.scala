@@ -1,7 +1,11 @@
 package tel.schich.convertedsync.io
 
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file._
+import java.nio.file.attribute.UserDefinedFileAttributeView
 
 import tel.schich.convertedsync.Util
 import tel.schich.convertedsync.mime.MimeDetector
@@ -10,6 +14,8 @@ import scala.collection.JavaConverters._
 
 class LocalAdapter(mime: MimeDetector) extends IOAdapter
 {
+	val PreviousCoreAttributeName = "previous-core"
+
 	override val separator: Char = File.separatorChar
 
 	override def files(base: String): Seq[FileInfo] = {
@@ -33,8 +39,45 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		val lastModifiedTime = Files.getLastModifiedTime(path)
 		val mimeType = mime.detectMime(path.toString, fileName)
 
-		FileInfo(path.toString, fileName, strippedRelative, lastModifiedTime, mimeType)
+		Files.getFileStore(path).supportsFileAttributeView(classOf[UserDefinedFileAttributeView])
+
+		FileInfo(path.toString, fileName,
+			strippedRelative, previousCore(path),
+			lastModifiedTime, mimeType)
 	}
+
+	private def attributeView(path: Path): Option[UserDefinedFileAttributeView] = {
+		val store = Files.getFileStore(path)
+		val viewType = classOf[UserDefinedFileAttributeView]
+		if (store.supportsFileAttributeView(viewType)) {
+			Some(Files.getFileAttributeView(path, viewType))
+		} else None
+	}
+
+	private def setAttribute(path: Path, name: String, value: String): Boolean = {
+		attributeView(path) match {
+			case Some(view) =>
+				view.write(name, UTF_8.encode(value))
+				true
+			case None => false
+		}
+	}
+
+	private def readAttribute(path: Path, name: String): Option[String] = {
+		attributeView(path).flatMap { view =>
+			if (view.list().contains(PreviousCoreAttributeName)) {
+				val buf = ByteBuffer.allocateDirect(view.size(PreviousCoreAttributeName))
+				view.read(PreviousCoreAttributeName, buf)
+				Some(UTF_8.decode(buf).toString)
+			} else None
+		}
+	}
+
+	private def previousCore(path: Path): Option[String] =
+		readAttribute(path, PreviousCoreAttributeName)
+
+	private def updatePreviousCore(path: Path, core: String): Boolean =
+		setAttribute(path, PreviousCoreAttributeName, core)
 
 	override def delete(file: String): Boolean = {
 		Files.delete(Paths.get(file))

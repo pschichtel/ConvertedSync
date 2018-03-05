@@ -11,5 +11,5 @@ import java.nio.file.attribute.FileTime
   * @param mime         the mime type
   */
 case class FileInfo(fullPath: String, fileName: String,
-                    core: String, lastModified: FileTime,
-                    mime: String)
+                    core: String, previousCore: Option[String],
+                    lastModified: FileTime, mime: String)

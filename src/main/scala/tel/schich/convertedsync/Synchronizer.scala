@@ -161,6 +161,7 @@ object Synchronizer {
 				}
 			}
 			remote.rename(tmpTarget, target)
+			// TODO update the previous core on the local adapter.
 			println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
 				+ s"    Now at: $target")
 			target
