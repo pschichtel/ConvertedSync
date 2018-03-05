@@ -58,6 +58,7 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		attributeView(path) match {
 			case Some(view) =>
 				view.write(name, UTF_8.encode(value))
+				// TODO revert write if not written completely or write until all bytes are written.
 				true
 			case None => false
 		}
@@ -68,6 +69,7 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 			if (view.list().contains(PreviousCoreAttributeName)) {
 				val buf = ByteBuffer.allocateDirect(view.size(PreviousCoreAttributeName))
 				view.read(PreviousCoreAttributeName, buf)
+				// TODO discard buffer and return None if not read completely or keep reading until all bytes haveb been read.
 				Some(UTF_8.decode(buf).toString)
 			} else None
 		}
