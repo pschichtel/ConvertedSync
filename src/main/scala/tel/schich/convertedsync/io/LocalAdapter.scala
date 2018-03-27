@@ -2,7 +2,6 @@ package tel.schich.convertedsync.io
 
 import java.io.File
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file._
 import java.nio.file.attribute.UserDefinedFileAttributeView
@@ -27,13 +26,14 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 
 		val relative = base.relativize(path)
 		val fileName = relative.getFileName.toString
-		val strippedRelative = fileName.lastIndexOf('.') match {
-			case -1 => relative.toString
+		val (strippedRelative, extension) = fileName.lastIndexOf('.') match {
+			case -1 => (relative.toString, "")
 			case index =>
 				val strippedName = fileName.substring(0, index)
+				val ext = fileName.substring(index)
 				val parent = relative.getParent
-				if (parent != null) parent.toString  + File.separatorChar + strippedName
-				else strippedName
+				if (parent != null) (parent.toString  + File.separatorChar + strippedName, ext)
+				else (strippedName, ext)
 
 		}
 		val lastModifiedTime = Files.getLastModifiedTime(path)
@@ -41,8 +41,9 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 
 		Files.getFileStore(path).supportsFileAttributeView(classOf[UserDefinedFileAttributeView])
 
-		FileInfo(path.toString, fileName,
-			strippedRelative, previousCore(path),
+		FileInfo(base.toString, path.toString,
+			fileName, strippedRelative,
+			previousCore(path), extension,
 			lastModifiedTime, mimeType)
 	}
 
@@ -57,8 +58,9 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 	private def setAttribute(path: Path, name: String, value: String): Boolean = {
 		attributeView(path) match {
 			case Some(view) =>
-				view.write(name, UTF_8.encode(value))
-				// TODO revert write if not written completely or write until all bytes are written.
+				val buf = UTF_8.encode(value)
+				// loop until the buffer is empty
+				while (buf.hasRemaining) view.write(name, buf)
 				true
 			case None => false
 		}
@@ -68,8 +70,8 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		attributeView(path).flatMap { view =>
 			if (view.list().contains(PreviousCoreAttributeName)) {
 				val buf = ByteBuffer.allocateDirect(view.size(PreviousCoreAttributeName))
-				view.read(PreviousCoreAttributeName, buf)
-				// TODO discard buffer and return None if not read completely or keep reading until all bytes haveb been read.
+				// loop until the buffer is full
+				while (buf.hasRemaining) view.read(PreviousCoreAttributeName, buf)
 				Some(UTF_8.decode(buf).toString)
 			} else None
 		}
@@ -78,8 +80,8 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 	private def previousCore(path: Path): Option[String] =
 		readAttribute(path, PreviousCoreAttributeName)
 
-	private def updatePreviousCore(path: Path, core: String): Boolean =
-		setAttribute(path, PreviousCoreAttributeName, core)
+	def updatePreviousCore(path: String, previousCore: String): Boolean =
+		setAttribute(Paths.get(path), PreviousCoreAttributeName, previousCore)
 
 	override def delete(file: String): Boolean = {
 		Files.delete(Paths.get(file))

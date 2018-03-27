@@ -29,9 +29,11 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 					val fileName = Util.fileName(path, separator)
 					val lastModifiedDate = parseLastModDate(line.substring(0, n))
 					val mimeType = mime.detectMime(path, fileName)
-					val core = extractCore(base, path)
-					// TODO optionally support the previous core
-					Some(FileInfo(path, fileName, core, None, lastModifiedDate, mimeType))
+					val (core, extension) = extractCore(base, path)
+					// TODO optionally support the previous core: currently blocked by the lack of a safe path encoding
+					// Currently we can only handle a single path (mostly) safe, the previous core would
+					// introduce a second one.
+					Some(FileInfo(base, path, fileName, core, None, extension, lastModifiedDate, mimeType))
 				}
 		}
 	}
@@ -49,19 +51,17 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 		FileTime.from(dateStr.toLong, SECONDS)
 	}
 
-	private def extractCore(base: String, path: String): String = {
-		val relativePath = path.substring(base.length).replaceAll("^" + separator, "")
-		val (prefix, fileName) = {
-			relativePath.lastIndexOf(separator) match {
-				case -1 => ("", relativePath)
-				case n  => (relativePath.substring(0, n + 1), relativePath.substring(n + 1))
-			}
+	private def extractCore(base: String, path: String): (String, String) = {
+		val relative = path
+				.substring(base.length)
+				.replace(separator, localSeparator)
+		    	.dropWhile(_ == localSeparator)
+
+		val sepPos = relative.lastIndexOf(localSeparator)
+		relative.lastIndexOf('.') match {
+			case n if n > sepPos => relative.splitAt(n)
+			case _ => (relative, "")
 		}
-		val withoutExtension = fileName.lastIndexOf('.') match {
-			case -1 => prefix + fileName
-			case n  => prefix + fileName.substring(0, n)
-		}
-		withoutExtension.replace('/', localSeparator)
 	}
 
 	override def delete(file: String): Boolean = {
@@ -86,6 +86,10 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 
 	override def mkdirs(path: String): Boolean = {
 		script.invoke(Seq("mkdirs", path)) == 0
+	}
+
+	override def updatePreviousCore(path: String, previousCore: String): Boolean = {
+		script.invoke(Seq("update_previous_core", path, previousCore)) == 0
 	}
 
 	override def relativeFreeSpace(path: String): Double = {

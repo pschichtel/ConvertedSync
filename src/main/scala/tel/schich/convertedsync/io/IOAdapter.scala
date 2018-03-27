@@ -3,6 +3,7 @@ package tel.schich.convertedsync.io
 trait IOAdapter {
 	def separator: Char
 	def files(base: String): Seq[FileInfo]
+	def updatePreviousCore(path: String, previousCore: String): Boolean
 	def delete(file: String): Boolean
 	def copy(from: String, to: String): Boolean
 	def move(from: String, to: String): Boolean

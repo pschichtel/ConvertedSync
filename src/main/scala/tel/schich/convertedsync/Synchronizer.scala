@@ -36,43 +36,57 @@ object Synchronizer {
 
 		println(s"Scanning the target directory: ${conf.target} ...")
 		val (targetFiles, targetScanTime) = time(SECONDS) {
-
-			val existingFiles = remote.files(conf.target.toString).map(x => (x.core, x)).toMap
-
-			if (conf.purge) {
-				val sourceLookup = sourceFiles.map(f => (f.core, f)).toMap
-				existingFiles.filter { case (core, existingFile) =>
-					if (!sourceLookup.contains(core) || conf.purgeDifferentMime && conflictingMimes(conf.rules, sourceLookup(core), existingFile)) {
-						remote.delete(existingFile.fullPath)
-						println(s"Purged ${existingFile.fullPath} (${existingFile.mime})")
-						false
-					} else true
-				}
-			} else existingFiles
+			remote.files(conf.target.toString)
 		}
-
 		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
+		val targetLookup = targetFiles.map(x => (x.core, x)).toMap
 
-		val toProcess =
-			if (conf.reEncodeAll) sourceFiles
-			else {
-				println("Detecting files to be processed...")
-				sourceFiles.filter { f =>
-					if (targetFiles.contains(f.core)) {
-						val target = targetFiles(f.core)
-						target.lastModified.compareTo(f.lastModified) < 0
-					} else true
+		val (filesToProcess, filesToRename, validFiles) = if (conf.reEncodeAll) {
+			println("Detecting files to be processed ...")
+			val (dontProcess, process) = sourceFiles.partition { f =>
+				targetLookup.get(f.core).fold(true) { target =>
+					target.lastModified.compareTo(f.lastModified) < 0
 				}
 			}
+
+			println("Detecting files to be renamed ...")
+			val (valid, rename) = dontProcess.partition { f =>
+				f.previousCore.flatMap(targetLookup.get).fold(true) { target =>
+					target.lastModified.compareTo(f.lastModified) < 0
+				}
+			}
+			(process, rename, valid)
+		} else (sourceFiles, Nil, Nil)
+
+		if (conf.purge) {
+			println("sPurging obsolete files from the target directory ...")
+			val handledFiles = (validFiles ++ filesToProcess).map(_.core).toSet ++ filesToRename.flatMap(_.previousCore)
+			val filesToPurge = targetFiles.filterNot(f => handledFiles.contains(f.core))
+
+			for (f <- filesToPurge) {
+				remote.delete(f.fullPath)
+				println(s"Purged ${f.fullPath} (${f.mime})")
+			}
+		}
+
+		for {
+			f <- filesToRename
+			previousCore <- f.previousCore
+			target <- targetLookup.get(previousCore)
+		} {
+			if (remote.rename(target.fullPath, f.reframeCore(target.base, target.extension))) {
+				local.updatePreviousCore(f.fullPath, f.core)
+			}
+		}
 
 		if (conf.threadCount > 0) {
 			println(s"Using ${conf.threadCount} thread(s) for the conversion.")
-			for (p <- Seq("minThreads", "numThreads", "maxThreads")) {
-				System.setProperty(s"scala.concurrent.context.$p", "" + conf.threadCount)
-			}
+			Seq("min", "num", "max")
+		    	.map(p => s"scala.concurrent.context.${p}Threads")
+		    	.foreach(System.setProperty(_: String, "" + conf.threadCount))
 		}
 
-		val convertibleFiles = toProcess.flatMap { f =>
+		val convertibleFiles = filesToProcess.flatMap { f =>
 			findRule(f.mime, conf.rules) match {
 				case Some(rule) =>
 					Some((f, rule))
@@ -161,7 +175,7 @@ object Synchronizer {
 				}
 			}
 			remote.rename(tmpTarget, target)
-			// TODO update the previous core on the local adapter.
+			local.updatePreviousCore(f.fullPath, f.core)
 			println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
 				+ s"    Now at: $target")
 			target
