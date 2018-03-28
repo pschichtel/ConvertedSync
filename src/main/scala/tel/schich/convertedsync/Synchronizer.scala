@@ -17,6 +17,8 @@ object Synchronizer {
 
 	val TempSuffix: String = ".temporary"
 
+	case class ConvertibleFile(file: FileInfo, rule: ConversionRule)
+
 	private def syncFromTo(conf: Config, local: IOAdapter, remote: IOAdapter): Boolean = {
 
 		if (!remote.exists(conf.target)) {
@@ -26,12 +28,21 @@ object Synchronizer {
 
 		println(s"Scanning the source directory: ${conf.source} ...")
 		val (sourceFiles, sourceScanTime) = time(SECONDS) {
-			local.files(conf.source.toString)
+			local.files(conf.source.toString).flatMap { f =>
+				findRule(f.mime, conf.rules) match {
+					case Some(rule) =>
+						Some(ConvertibleFile(f, rule))
+					case None =>
+						println(s"No applicable conversion rule for file: ${f.fullPath} (${f.mime})")
+						None
+				}
+			}
 		}
 		println(s"Found ${sourceFiles.length} source files in $sourceScanTime seconds.")
 
-		sourceFiles.groupBy(fd => fd.mime).foreach {
-			case (group, files) => println(s"$group -> ${files.length}")
+		println("File type distribution:")
+		sourceFiles.groupBy(cf => cf.file.mime).foreach {
+			case (group, files) => println(s"\t$group -> ${files.length}")
 		}
 
 		println(s"Scanning the target directory: ${conf.target} ...")
@@ -45,23 +56,23 @@ object Synchronizer {
 		else {
 			println("Detecting files to be processed ...")
 			val (process, dontProcess) = sourceFiles.partition { f =>
-				targetLookup.get(f.core).fold(true) { target =>
-					target.lastModified.compareTo(f.lastModified) < 0
+				targetLookup.get(f.file.core).fold(true) { target =>
+					target.lastModified.compareTo(f.file.lastModified) < 0
 				}
 			}
 
 			println("Detecting files to be renamed ...")
 			val (rename, valid) = dontProcess.partition { f =>
-				f.previousCore.flatMap(targetLookup.get).fold(false) { target =>
-					target.lastModified.compareTo(f.lastModified) < 0
+				f.file.previousCore.flatMap(targetLookup.get).fold(false) { target =>
+					target.lastModified.compareTo(f.file.lastModified) < 0
 				}
 			}
 			(process, rename, valid)
 		}
 
 		if (conf.purge) {
-			println("sPurging obsolete files from the target directory ...")
-			val handledFiles = (validFiles ++ filesToProcess).map(_.core).toSet ++ filesToRename.flatMap(_.previousCore)
+			println("Purging obsolete files from the target directory ...")
+			val handledFiles = (validFiles ++ filesToProcess).map(_.file.core).toSet ++ filesToRename.flatMap(_.file.previousCore)
 			val filesToPurge = targetFiles.filterNot(f => handledFiles.contains(f.core))
 
 			for (f <- filesToPurge) {
@@ -72,11 +83,11 @@ object Synchronizer {
 
 		for {
 			f <- filesToRename
-			previousCore <- f.previousCore
+			previousCore <- f.file.previousCore
 			target <- targetLookup.get(previousCore)
 		} {
-			if (remote.rename(target.fullPath, f.reframeCore(target.base, target.extension))) {
-				local.updatePreviousCore(f.fullPath, f.core)
+			if (remote.rename(target.fullPath, f.file.reframeCore(target.base, target.extension))) {
+				local.updatePreviousCore(f.file.fullPath, f.file.core)
 			}
 		}
 
@@ -87,19 +98,9 @@ object Synchronizer {
 		    	.foreach(System.setProperty(_: String, "" + conf.threadCount))
 		}
 
-		val convertibleFiles = filesToProcess.flatMap { f =>
-			findRule(f.mime, conf.rules) match {
-				case Some(rule) =>
-					Some((f, rule))
-				case None =>
-					println(s"No applicable conversion rule for file: ${f.fullPath} (${f.mime})")
-					None
-			}
-		}
+		println(s"${filesToProcess.length} source files will be synchronized to the target folder.")
 
-		println(s"${convertibleFiles.length} source files will be synchronized to the target folder.")
-
-		val futures = convertibleFiles.map((convert(conf, local, remote) _).tupled)
+		val futures = filesToProcess.map(convert(conf, local, remote))
 
 		Await.result(Future.sequence(futures), Duration.Inf)
 
@@ -112,8 +113,9 @@ object Synchronizer {
 		true
 	}
 
-	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(f: FileInfo, rule: ConversionRule): Future[String] = {
+	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile): Future[String] = {
 
+		val ConvertibleFile(f, rule) = file
 		// the target path
 		val target = conf.target.toString + local.separator + f.core + '.' + rule.extension
 		// a temporary target path on the same file system as the target path
