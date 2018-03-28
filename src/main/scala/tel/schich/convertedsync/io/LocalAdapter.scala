@@ -10,10 +10,11 @@ import tel.schich.convertedsync.Util
 import tel.schich.convertedsync.mime.MimeDetector
 
 import scala.collection.JavaConverters._
+import scala.util.control.NonFatal
 
 class LocalAdapter(mime: MimeDetector) extends IOAdapter
 {
-	val PreviousCoreAttributeName = "previous-core"
+	val PreviousCoreAttributeName = s"previous-core"
 
 	override val separator: Char = File.separatorChar
 
@@ -39,8 +40,6 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		val lastModifiedTime = Files.getLastModifiedTime(path)
 		val mimeType = mime.detectMime(path.toString, fileName)
 
-		Files.getFileStore(path).supportsFileAttributeView(classOf[UserDefinedFileAttributeView])
-
 		FileInfo(base.toString, path.toString,
 			fileName, strippedRelative,
 			previousCore(path), extension,
@@ -52,6 +51,15 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		val viewType = classOf[UserDefinedFileAttributeView]
 		if (store.supportsFileAttributeView(viewType)) {
 			Some(Files.getFileAttributeView(path, viewType))
+		} else if (store.`type`() == "ext4") {
+			try {
+				Some(Ext4AttrAccess.getView(path))
+			} catch {
+				case NonFatal(e) =>
+					println("Failed to create filesystem view for attribute access!")
+					e.printStackTrace()
+					None
+			}
 		} else None
 	}
 
