@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit.SECONDS
 import org.apache.tika.config.TikaConfig
 import tel.schich.convertedsync.ConversionRule.findRule
 import tel.schich.convertedsync.Timing.time
-import tel.schich.convertedsync.io.{FileInfo, IOAdapter, LocalAdapter, ShellAdapter}
+import tel.schich.convertedsync.io._
 import tel.schich.convertedsync.mime.TikaMimeDetector
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -187,12 +187,18 @@ object Synchronizer {
 		}
 	}
 
+	private def debugAdapter(adapter: IOAdapter): IOAdapter =
+		sys.env.get("DEBUG_IO").fold(adapter) { v =>
+			println(s"Making adapter readonly: ${adapter.getClass}")
+			new ReadonlyProxy(adapter, v.toBoolean)
+		}
+
 	def sync(conf: Config): Boolean = {
 		val mime = new TikaMimeDetector(TikaConfig.getDefaultConfig, !conf.mimeFromExtension, conf.warnWrongExtension)
-		val local = new LocalAdapter(mime)
+		val local = debugAdapter(new LocalAdapter(mime))
 		resolveRemoteAdapter(conf, local) match {
 			case Some(remote) =>
-				syncFromTo(conf, local, remote)
+				syncFromTo(conf, local, debugAdapter(remote))
 			case _ =>
 				System.err.println("The given IO adapter could not be resolved.")
 				false
@@ -218,7 +224,7 @@ object Synchronizer {
 		}
 	}
 
-	private def resolveRemoteAdapter(conf: Config, localAdapter: LocalAdapter): Option[IOAdapter] = {
+	private def resolveRemoteAdapter(conf: Config, localAdapter: IOAdapter): Option[IOAdapter] = {
 		conf.adapter match {
 			case Some(path) =>
 				ShellScript.resolve(path) match {
