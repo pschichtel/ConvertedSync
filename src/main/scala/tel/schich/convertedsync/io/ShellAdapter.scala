@@ -38,12 +38,12 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 		}
 	}
 
-	override def files(base: String): Seq[FileInfo] = {
+	override def files(base: String): IndexedSeq[FileInfo] = {
 		script.invokeAndRead(Seq("list", base)) match {
 			case (0, out) =>
 				Util.splitLines(out).filter(_.nonEmpty).flatMap(lineToFileInfo(base, _))
 			case _ =>
-				Seq.empty
+				Vector.empty
 		}
 	}
 

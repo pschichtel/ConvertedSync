@@ -17,9 +17,9 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 
 	override val separator: Char = File.separatorChar
 
-	override def files(base: String): Seq[FileInfo] = {
+	override def files(base: String): IndexedSeq[FileInfo] = {
 		val basePath = Paths.get(base)
-		Files.walk(basePath).iterator().asScala.filter(Files.isRegularFile(_)).map(pathToFileInfo(basePath, _)).toSeq
+		Files.walk(basePath).iterator().asScala.filter(Files.isRegularFile(_)).map(pathToFileInfo(basePath, _)).toVector
 	}
 
 	private def pathToFileInfo(base: Path, path: Path): FileInfo = {

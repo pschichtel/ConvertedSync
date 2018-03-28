@@ -51,5 +51,5 @@ object Util {
 		}
 	}
 
-	def splitLines(in: String): Seq[String] = in.split("(?:\r\n|\r|\n)", -1)
+	def splitLines(in: String): IndexedSeq[String] = in.split("(?:\r\n|\r|\n)", -1)
 }

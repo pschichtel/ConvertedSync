@@ -15,7 +15,7 @@ class ReadonlyProxy(slave: IOAdapter, succeedWrite: Boolean = false) extends IOA
 	override def separator: Char =
 		slave.separator
 
-	override def files(base: String): Seq[FileInfo] =
+	override def files(base: String): IndexedSeq[FileInfo] =
 		slave.files(base)
 
 	override def updatePreviousCore(path: String, previousCore: String): Boolean =
