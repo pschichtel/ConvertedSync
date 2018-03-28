@@ -41,22 +41,23 @@ object Synchronizer {
 		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
 		val targetLookup = targetFiles.map(x => (x.core, x)).toMap
 
-		val (filesToProcess, filesToRename, validFiles) = if (conf.reEncodeAll) {
+		val (filesToProcess, filesToRename, validFiles) = if (conf.reEncodeAll) (sourceFiles, Nil, Nil)
+		else {
 			println("Detecting files to be processed ...")
-			val (dontProcess, process) = sourceFiles.partition { f =>
+			val (process, dontProcess) = sourceFiles.partition { f =>
 				targetLookup.get(f.core).fold(true) { target =>
 					target.lastModified.compareTo(f.lastModified) < 0
 				}
 			}
 
 			println("Detecting files to be renamed ...")
-			val (valid, rename) = dontProcess.partition { f =>
-				f.previousCore.flatMap(targetLookup.get).fold(true) { target =>
+			val (rename, valid) = dontProcess.partition { f =>
+				f.previousCore.flatMap(targetLookup.get).fold(false) { target =>
 					target.lastModified.compareTo(f.lastModified) < 0
 				}
 			}
 			(process, rename, valid)
-		} else (sourceFiles, Nil, Nil)
+		}
 
 		if (conf.purge) {
 			println("sPurging obsolete files from the target directory ...")
