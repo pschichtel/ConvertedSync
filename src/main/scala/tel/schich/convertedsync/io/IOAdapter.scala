@@ -1,8 +1,10 @@
 package tel.schich.convertedsync.io
 
+import scala.collection.parallel.ParSeq
+
 trait IOAdapter {
 	def separator: Char
-	def files(base: String): IndexedSeq[FileInfo]
+	def files(base: String): ParSeq[FileInfo]
 	def updatePreviousCore(path: String, previousCore: String): Boolean
 	def delete(file: String): Boolean
 	def copy(from: String, to: String): Boolean

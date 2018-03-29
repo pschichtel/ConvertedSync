@@ -6,6 +6,8 @@ import java.util.concurrent.TimeUnit.SECONDS
 import tel.schich.convertedsync.mime.MimeDetector
 import tel.schich.convertedsync.{ShellScript, Util}
 
+import scala.collection.parallel.ParSeq
+
 class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char) extends IOAdapter {
 
 	val DefaultSeparator: Char = '/'
@@ -38,12 +40,12 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 		}
 	}
 
-	override def files(base: String): IndexedSeq[FileInfo] = {
+	override def files(base: String): ParSeq[FileInfo] = {
 		script.invokeAndRead(Seq("list", base)) match {
 			case (0, out) =>
-				Util.splitLines(out).filter(_.nonEmpty).flatMap(lineToFileInfo(base, _))
+				Util.splitLines(out).filter(_.nonEmpty).flatMap(lineToFileInfo(base, _)).par
 			case _ =>
-				Vector.empty
+				Vector.empty.par
 		}
 	}
 

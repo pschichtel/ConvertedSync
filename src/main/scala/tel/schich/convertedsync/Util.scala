@@ -10,19 +10,19 @@ object Util {
 		try {
 			// Try an atomic move (rename in Linux) operation
 			Files.move(from, to, StandardCopyOption.ATOMIC_MOVE)
-			true
+			return true
 		} catch {
 			case _: AtomicMoveNotSupportedException =>
 				try {
 					// Try a simple move operation (move in Linux)
 					Files.move(from, to)
-					true
+					return true
 				} catch {
 					case _: FileSystemException =>
 						// Copy the source and delete it afterwards if successful
 						Files.copy(from, to)
 						Files.delete(from)
-						true
+						return true
 				}
 		}
 		false

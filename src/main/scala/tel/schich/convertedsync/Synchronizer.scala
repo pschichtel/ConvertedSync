@@ -9,21 +9,28 @@ import tel.schich.convertedsync.Timing.time
 import tel.schich.convertedsync.io._
 import tel.schich.convertedsync.mime.TikaMimeDetector
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
-
 object Synchronizer {
 
 	val TempSuffix: String = ".temporary"
 
 	case class ConvertibleFile(file: FileInfo, rule: ConversionRule)
 
+	sealed trait ConversionResult
+	case object Success extends ConversionResult
+	case class Failure(sourceFile: FileInfo, reason: String) extends ConversionResult
+
 	private def syncFromTo(conf: Config, local: IOAdapter, remote: IOAdapter): Boolean = {
 
 		if (!remote.exists(conf.target)) {
 			println("Target directory does not exist!")
 			System.exit(1)
+		}
+
+		if (conf.threadCount > 0) {
+			println(s"Using ${conf.threadCount} thread(s).")
+			Seq("min", "num", "max")
+				.map(p => s"scala.concurrent.context.${p}Threads")
+				.foreach(System.setProperty(_: String, "" + conf.threadCount))
 		}
 
 		println(s"Scanning the source directory: ${conf.source} ...")
@@ -86,23 +93,28 @@ object Synchronizer {
 			previousCore <- f.file.previousCore
 			target <- targetLookup.get(previousCore)
 		} {
-			if (remote.rename(target.fullPath, f.file.reframeCore(target.base, target.extension))) {
+			val newTarget = f.file.reframeCore(target.base, target.extension)
+			val newTargetParent = Util.parentPath(newTarget, remote.separator)
+			if (!remote.exists(newTargetParent)) {
+				remote.mkdirs(newTargetParent)
+			}
+			if (remote.rename(target.fullPath, newTarget)) {
 				local.updatePreviousCore(f.file.fullPath, f.file.core)
 			}
 		}
 
-		if (conf.threadCount > 0) {
-			println(s"Using ${conf.threadCount} thread(s) for the conversion.")
-			Seq("min", "num", "max")
-		    	.map(p => s"scala.concurrent.context.${p}Threads")
-		    	.foreach(System.setProperty(_: String, "" + conf.threadCount))
-		}
-
 		println(s"${filesToProcess.length} source files will be synchronized to the target folder.")
 
-		val futures = filesToProcess.map(convert(conf, local, remote))
-
-		Await.result(Future.sequence(futures), Duration.Inf)
+		val failures = filesToProcess.map(convert(conf, local, remote)).flatMap {
+			case Success => Nil
+			case f: Failure => Seq(f)
+		}
+		if (failures.nonEmpty) {
+			println("Conversion failures:")
+			for (fail <- failures) {
+				println(s"\t${fail.sourceFile.fullPath}: ${fail.reason}")
+			}
+		}
 
 		if (conf.purge) {
 			println("Purge empty directories...")
@@ -113,7 +125,7 @@ object Synchronizer {
 		true
 	}
 
-	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile): Future[String] = {
+	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile): ConversionResult = {
 
 		val ConvertibleFile(f, rule) = file
 		// the target path
@@ -121,72 +133,56 @@ object Synchronizer {
 		// a temporary target path on the same file system as the target path
 		val tmpTarget = target + TempSuffix
 		// an intermediate target path on an arbitrary file system
-		val intermediateTarget = conf.intermediateDir.map {d =>
+		val intermediateTarget = conf.intermediateDir.fold(tmpTarget) { d =>
 			val fileName = f.fileName
 			val tempFile = Files.createTempFile(d, "intermediate_", s"_$fileName")
 			if (Files.exists(tempFile)) {
 				Files.delete(tempFile)
 			}
 			tempFile.toString
-		}.getOrElse(tmpTarget)
+		}
 
 		val intermediateAdapter =
 			if (intermediateTarget.equals(tmpTarget)) remote
 			else local
 
-		Future {
-			val dir = Util.parentPath(target, remote.separator)
-			if (!remote.exists(dir)) {
-				remote.mkdirs(dir)
-			}
+		val dir = Util.parentPath(target, remote.separator)
+		if (!remote.exists(dir)) {
+			remote.mkdirs(dir)
+		}
 
-			val relativeFreeSpace = remote.relativeFreeSpace(dir)
-			println("Free space on target file system: %1.2f%%".format(relativeFreeSpace))
-			if (relativeFreeSpace < conf.lowSpaceThreshold) {
-				throw new ConversionException(s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)", f)
-			}
-
+		val relativeFreeSpace = remote.relativeFreeSpace(dir)
+		println("Free space on target file system: %1.2f%%".format(relativeFreeSpace))
+		if (relativeFreeSpace < conf.lowSpaceThreshold) Failure(f, s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)")
+		else {
 			val fullPath = Paths.get(f.fullPath)
 
-			if (!Files.exists(fullPath)) {
-				throw new ConversionException("The file was queued for conversion, but disappeared!", f)
-			}
+			if (!Files.exists(fullPath)) Failure(f, "The file was queued for conversion, but disappeared!")
+			else {
 
-			if (f.mime == rule.targetMime && !conf.force) {
-				println("The input file mime type matches the target mime type, copying...")
-				time() {
-					intermediateAdapter.copy(f.fullPath, intermediateTarget)
-				}._2
-			} else {
-				val t = time() {
-					runConverter(conf, f, intermediateTarget, rule)
-				}._2
-
-				if (!intermediateAdapter.exists(intermediateTarget)) {
-					throw new ConversionException(s"Converter did not generate file $intermediateTarget", f)
+				val (success, t) = if (f.mime == rule.targetMime && !conf.force) {
+					println("The input file mime type matches the target mime type, copying...")
+					time() {
+						intermediateAdapter.copy(f.fullPath, intermediateTarget)
+					}
+				} else {
+					time() {
+						runConverter(conf, f, intermediateTarget, rule)
+						intermediateAdapter.exists(intermediateTarget)
+					}
 				}
-				t
-			}
-		}.map { time =>
-			if (intermediateAdapter == local) {
-				try {
-					remote.move(intermediateTarget, tmpTarget)
-				} catch {
-					case e: Exception if local.exists(intermediateTarget) =>
+				if (!success) Failure(f, s"Converter did not generate file $intermediateTarget")
+				else {
+					if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
 						local.delete(intermediateTarget)
-						throw e
+					}
+					remote.rename(tmpTarget, target)
+					local.updatePreviousCore(f.fullPath, f.core)
+					println(s"Conversion completed after $t seconds: ${f.fullPath}\n"
+						+ s"    Now at: $target")
+					Success
 				}
 			}
-			remote.rename(tmpTarget, target)
-			local.updatePreviousCore(f.fullPath, f.core)
-			println(s"Conversion completed after ${time}ms: ${f.fullPath}\n"
-				+ s"    Now at: $target")
-			target
-		} recover {
-			case e: ConversionException =>
-				println(s"Conversion failed for: ${f.fullPath}\n"
-					+ s"    Error: ${e.getMessage}")
-				null
 		}
 	}
 

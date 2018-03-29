@@ -1,5 +1,7 @@
 package tel.schich.convertedsync.io
 
+import scala.collection.parallel.ParSeq
+
 class ReadonlyProxy(slave: IOAdapter, succeedWrite: Boolean = false) extends IOAdapter {
 
 	private def logAndReturn(method: String, args: Any*): Boolean = {
@@ -15,7 +17,7 @@ class ReadonlyProxy(slave: IOAdapter, succeedWrite: Boolean = false) extends IOA
 	override def separator: Char =
 		slave.separator
 
-	override def files(base: String): IndexedSeq[FileInfo] =
+	override def files(base: String): ParSeq[FileInfo] =
 		slave.files(base)
 
 	override def updatePreviousCore(path: String, previousCore: String): Boolean =

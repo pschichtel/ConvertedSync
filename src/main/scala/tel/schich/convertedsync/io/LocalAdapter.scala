@@ -10,6 +10,8 @@ import tel.schich.convertedsync.Util
 import tel.schich.convertedsync.mime.MimeDetector
 
 import scala.collection.JavaConverters._
+import scala.collection.parallel.ParSeq
+import scala.util.Try
 import scala.util.control.NonFatal
 
 class LocalAdapter(mime: MimeDetector) extends IOAdapter
@@ -18,9 +20,14 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 
 	override val separator: Char = File.separatorChar
 
-	override def files(base: String): IndexedSeq[FileInfo] = {
+	override def files(base: String): ParSeq[FileInfo] = {
 		val basePath = Paths.get(base)
-		Files.walk(basePath).iterator().asScala.filter(Files.isRegularFile(_)).map(pathToFileInfo(basePath, _)).toVector
+		Files.walk(basePath)
+			.iterator()
+			.asScala
+			.toSeq
+			.filter(Files.isRegularFile(_))
+			.map(pathToFileInfo(basePath, _)).par
 	}
 
 	private def pathToFileInfo(base: Path, path: Path): FileInfo = {
@@ -95,8 +102,7 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		setAttribute(Paths.get(path), PreviousCoreAttributeName, previousCore)
 
 	override def delete(file: String): Boolean = {
-		Files.delete(Paths.get(file))
-		true
+		Try(Files.delete(Paths.get(file))).isSuccess
 	}
 
 	override def move(from: String, to: String): Boolean = {
@@ -104,8 +110,7 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 	}
 
 	override def copy(from: String, to: String): Boolean = {
-		Files.copy(Paths.get(from), Paths.get(to))
-		true
+		Try(Files.copy(Paths.get(from), Paths.get(to))).isSuccess
 	}
 
 	override def rename(from: String, to: String): Boolean = {
@@ -117,8 +122,7 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 	}
 
 	override def mkdirs(path: String): Boolean = {
-		Files.createDirectories(Paths.get(path))
-		true
+		Try(Files.createDirectories(Paths.get(path))).isSuccess
 	}
 
 	override def relativeFreeSpace(path: String): Double = {
