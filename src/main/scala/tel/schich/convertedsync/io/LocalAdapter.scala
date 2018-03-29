@@ -66,6 +66,7 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 	private def setAttribute(path: Path, name: String, value: String): Boolean = {
 		attributeView(path) match {
 			case Some(view) =>
+				// no rewind of the resulting buffer needed
 				val buf = UTF_8.encode(value)
 				// loop until the buffer is empty
 				while (buf.hasRemaining) view.write(name, buf)
@@ -80,6 +81,8 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 				val buf = ByteBuffer.allocateDirect(view.size(PreviousCoreAttributeName))
 				// loop until the buffer is full
 				while (buf.hasRemaining) view.read(PreviousCoreAttributeName, buf)
+				// rewind the buffer position, otherwise decode will ne see the content
+				buf.rewind()
 				Some(UTF_8.decode(buf).toString)
 			} else None
 		}
