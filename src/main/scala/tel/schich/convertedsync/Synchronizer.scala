@@ -13,12 +13,6 @@ object Synchronizer {
 
 	val TempSuffix: String = ".temporary"
 
-	case class ConvertibleFile(file: FileInfo, rule: ConversionRule)
-
-	sealed trait ConversionResult
-	case object Success extends ConversionResult
-	case class Failure(sourceFile: FileInfo, reason: String) extends ConversionResult
-
 	private def syncFromTo(conf: Config, local: IOAdapter, remote: IOAdapter): Boolean = {
 
 		if (!remote.exists(conf.target)) {
@@ -204,9 +198,8 @@ object Synchronizer {
 		}
 	}
 
-	private def conflictingMimes(rules: Seq[ConversionRule], sourceFile: FileInfo, existingFile: FileInfo) = {
-		findRule(sourceFile.mime, rules)
-			.forall(r => !r.targetMime.equalsIgnoreCase(existingFile.mime))
+	private def mimeConflict(sourceFile: ConvertibleFile, existingFile: FileInfo) = {
+		sourceFile.rule.targetMime.equalsIgnoreCase(existingFile.mime)
 	}
 
 	private def runConverter(conf: Config, sourceFile: FileInfo, targetFile: String, rule: ConversionRule): Unit = {

@@ -1,5 +1,7 @@
 package tel.schich.convertedsync
 
+import tel.schich.convertedsync.io.FileInfo
+
 case class ConversionRule(sourceMime: String, targetMime: String, extension: String, converter: String) {
 	def matches(mime: String): Boolean = ConversionRule.matchMime(mime, sourceMime)
 }
@@ -29,3 +31,5 @@ object ConversionRule {
 	def findRule(sourceMime: String, rules: Seq[ConversionRule]): Option[ConversionRule] =
 		rules.find(_.matches(sourceMime))
 }
+
+case class ConvertibleFile(file: FileInfo, rule: ConversionRule)

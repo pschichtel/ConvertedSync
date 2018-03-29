@@ -25,9 +25,9 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		Files.walk(basePath)
 			.iterator()
 			.asScala
-			.toSeq
+			.toSeq.par
 			.filter(Files.isRegularFile(_))
-			.map(pathToFileInfo(basePath, _)).par
+			.map(pathToFileInfo(basePath, _))
 	}
 
 	private def pathToFileInfo(base: Path, path: Path): FileInfo = {
