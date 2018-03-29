@@ -1,6 +1,7 @@
 package tel.schich.convertedsync
 
 import java.nio.file._
+import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit.SECONDS
 
 import org.apache.tika.config.TikaConfig
@@ -12,6 +13,10 @@ import tel.schich.convertedsync.mime.TikaMimeDetector
 object Synchronizer {
 
 	val TempSuffix: String = ".temporary"
+
+	implicit class OrderedFileTime(private val self: FileTime) extends AnyVal with Ordered[FileTime] {
+		override def compare(that: FileTime): Int = self.compareTo(that)
+	}
 
 	private def syncFromTo(conf: Config, local: IOAdapter, remote: IOAdapter): Boolean = {
 
@@ -58,7 +63,7 @@ object Synchronizer {
 			println("Detecting files to be processed ...")
 			val (process, dontProcess) = sourceFiles.partition { f =>
 				targetLookup.get(f.file.core).fold(true) { target =>
-					target.lastModified.compareTo(f.file.lastModified) < 0
+					target.lastModified < f.file.lastModified || conf.enforceMime && mimeConflict(f, target)
 				}
 			}
 

@@ -7,7 +7,7 @@ import scopt.{OptionParser, Read}
 
 case class Config(source: Path, target: String,
                   convertersDir: Path, purge: Boolean,
-                  purgeDifferentMime: Boolean, force: Boolean,
+                  enforceMime: Boolean, force: Boolean,
                   mimeFromExtension: Boolean, warnWrongExtension: Boolean,
                   threadCount: Int, intermediateDir: Option[Path],
                   silenceConverter: Boolean, lowSpaceThreshold: Double,
@@ -28,7 +28,7 @@ object Config {
 	val defaults = Config(
 		null, null,
 		Paths.get("converters"), purge = false,
-		purgeDifferentMime = false, force = false,
+		enforceMime = false, force = false,
 		mimeFromExtension = false, warnWrongExtension = true,
 		threadCount = 0, intermediateDir = None,
 		silenceConverter = false, lowSpaceThreshold = 0,
@@ -60,8 +60,8 @@ object Config {
 			config.copy(purge = true)
 		}
 
-		opt[Unit]("purge-different-mime") text "Also delete files in the target folder, that don't have the expected mime type." action {(_, config) =>
-			config.copy(purgeDifferentMime = true)
+		opt[Unit]("enforce-mime") text "Re-encode files that are unchanged, but don't have the requested mime type." action {(_, config) =>
+			config.copy(enforceMime = true)
 		}
 
 		opt[Unit]("force") text "Force conversion even if the mime-type of source and target match." action {(_, config) =>
