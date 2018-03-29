@@ -99,9 +99,9 @@ object Synchronizer {
 
 		println(s"${filesToProcess.length} source files will be synchronized to the target folder.")
 
-		val failures = filesToProcess.map(convert(conf, local, remote)).flatMap {
-			case Success => Nil
-			case f: Failure => Seq(f)
+		val failures = filesToProcess.map(f => convert(conf, local, remote)(f, targetLookup.get(f.file.core))).flatMap {
+			case Success => None
+			case f: Failure => Some(f)
 		}
 		if (failures.nonEmpty) {
 			println("Conversion failures:")
@@ -119,13 +119,17 @@ object Synchronizer {
 		true
 	}
 
-	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile): ConversionResult = {
+	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile, existing: Option[FileInfo]): ConversionResult = {
 
 		val ConvertibleFile(f, rule) = file
-		// the target path
-		val target = conf.target.toString + local.separator + f.core + '.' + rule.extension
+		// rebase source-core onto the target base
+		val rebasedCore = conf.target + local.separator + f.core
+		// the expected target path given the source file and the conversion rule
+		val expectedTarget = rebasedCore + '.' + rule.extension
+		// the target either based on the already existing file or on the expected target
+		val target = existing.fold(expectedTarget)(_.fullPath)
 		// a temporary target path on the same file system as the target path
-		val tmpTarget = target + TempSuffix
+		val tmpTarget = rebasedCore + TempSuffix
 		// an intermediate target path on an arbitrary file system
 		val intermediateTarget = conf.intermediateDir.fold(tmpTarget) { d =>
 			val fileName = f.fileName
@@ -170,7 +174,12 @@ object Synchronizer {
 					if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
 						local.delete(intermediateTarget)
 					}
-					remote.rename(tmpTarget, target)
+					if (target == expectedTarget) {
+						remote.rename(tmpTarget, target)
+					} else {
+						remote.delete(target)
+						remote.rename(tmpTarget, expectedTarget)
+					}
 					local.updatePreviousCore(f.fullPath, f.core)
 					println(s"Conversion completed after $t seconds: ${f.fullPath}\n"
 						+ s"    Now at: $target")
