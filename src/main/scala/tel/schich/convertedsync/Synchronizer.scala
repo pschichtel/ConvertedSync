@@ -110,8 +110,8 @@ object Synchronizer {
 		}
 		if (failures.nonEmpty) {
 			println("Conversion failures:")
-			for (fail <- failures.seq.sorted) {
-				println(s"\t${fail.sourceFile.fullPath}: ${fail.reason}")
+			for ((fail, i) <- failures.seq.sorted.zipWithIndex) {
+				println(s"\t${displayIndex(i, failures.length)}. ${fail.sourceFile.fullPath}: ${fail.reason}")
 			}
 		}
 
@@ -123,6 +123,9 @@ object Synchronizer {
 		println("Done!")
 		failures.nonEmpty
 	}
+
+	def displayIndex(i: Int, len: Int): String =
+		s"${(i + 1).toString.reverse.padTo(len.toString.length, ' ').reverse}."
 
 	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile, existing: Option[FileInfo]): ConversionResult = {
 

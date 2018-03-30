@@ -43,7 +43,7 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 	override def files(base: String): ParSeq[FileInfo] = {
 		script.invokeAndRead(Seq("list", base)) match {
 			case (0, out) =>
-				Util.splitLines(out).filter(_.nonEmpty).flatMap(lineToFileInfo(base, _)).par
+				Util.splitLines(out).par.filter(_.nonEmpty).flatMap(lineToFileInfo(base, _))
 			case _ =>
 				Vector.empty.par
 		}
