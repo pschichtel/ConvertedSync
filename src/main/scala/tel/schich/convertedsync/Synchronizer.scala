@@ -70,7 +70,7 @@ object Synchronizer {
 			println("Detecting files to be renamed ...")
 			val (rename, valid) = dontProcess.partition { f =>
 				f.file.previousCore.flatMap(targetLookup.get).fold(false) { target =>
-					target.lastModified.compareTo(f.file.lastModified) < 0
+					target.lastModified < f.file.lastModified
 				}
 			}
 			(process, rename, valid)
@@ -154,8 +154,15 @@ object Synchronizer {
 			remote.mkdirs(dir)
 		}
 
-		val relativeFreeSpace = remote.relativeFreeSpace(dir)
-		println("Free space on target file system: %1.2f%%".format(relativeFreeSpace))
+		val relativeFreeSpace = remote.relativeFreeSpace(dir) match {
+			case Left(error) =>
+				println(s"Failed to detect free space on target: $error")
+				Double.MaxValue
+			case Right(freeSpace) =>
+				println("Free space on target file system: %1.2f%%".format(freeSpace))
+				freeSpace
+		}
+
 		if (relativeFreeSpace < conf.lowSpaceThreshold) Failure(f, s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)")
 		else {
 			val fullPath = Paths.get(f.fullPath)
@@ -166,16 +173,19 @@ object Synchronizer {
 				val (success, t) = if (f.mime == rule.targetMime && !conf.force) {
 					println("The input file mime type matches the target mime type, copying...")
 					time() {
-						intermediateAdapter.copy(f.fullPath, intermediateTarget)
+						if (intermediateAdapter.copy(f.fullPath, intermediateTarget)) Success
+						else Failure(f, "Failed to copy the file over to the target!")
 					}
 				} else {
 					time() {
-						runConverter(conf, f, intermediateTarget, rule)
-						intermediateAdapter.exists(intermediateTarget)
+						runConverter(conf, f, intermediateTarget, rule).flatMap {
+							if (intermediateAdapter.exists(intermediateTarget)) Success
+							else Failure(f, s"Converter did not generate file $intermediateTarget")
+						}
 					}
 				}
-				if (!success) Failure(f, s"Converter did not generate file $intermediateTarget")
-				else {
+
+				success.flatMap {
 					if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
 						local.delete(intermediateTarget)
 					}
@@ -216,17 +226,17 @@ object Synchronizer {
 		sourceFile.rule.targetMime.equalsIgnoreCase(existingFile.mime)
 	}
 
-	private def runConverter(conf: Config, sourceFile: FileInfo, targetFile: String, rule: ConversionRule): Unit = {
+	private def runConverter(conf: Config, sourceFile: FileInfo, targetFile: String, rule: ConversionRule): ConversionResult = {
 
 		ShellScript.resolve(conf.convertersDir.resolve(rule.converter), !conf.silenceConverter) match {
 			case Some(script) =>
 				println(s"Applying converter: ${script.executable}")
 				val status = script.invoke(Array(sourceFile.fullPath, targetFile))
 				if (status != 0) {
-					throw new ConversionException(s"Converter for ${sourceFile.mime} was not successful: $status", sourceFile)
-				}
+					Failure(sourceFile, s"Converter for ${sourceFile.mime} was not successful: $status")
+				} else Success
 			case _ =>
-				throw new ConversionException(s"Converter for ${sourceFile.mime} not found!", sourceFile)
+				Failure(sourceFile, s"Converter for ${sourceFile.mime} not found!")
 		}
 	}
 

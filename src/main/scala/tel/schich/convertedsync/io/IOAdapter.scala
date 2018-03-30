@@ -12,6 +12,6 @@ trait IOAdapter {
 	def rename(from: String, to: String): Boolean
 	def exists(path: String): Boolean
 	def mkdirs(path: String): Boolean
-	def relativeFreeSpace(path: String): Double
+	def relativeFreeSpace(path: String): Either[String, Double]
 	def purgeEmptyFolders(path: String): Boolean
 }

@@ -125,9 +125,14 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 		Try(Files.createDirectories(Paths.get(path))).isSuccess
 	}
 
-	override def relativeFreeSpace(path: String): Double = {
-		val fileStore = Files.getFileStore(Paths.get(path))
-		fileStore.getUsableSpace / fileStore.getTotalSpace.asInstanceOf[Double]
+	override def relativeFreeSpace(path: String): Either[String, Double] = {
+		try {
+			val fileStore = Files.getFileStore(Paths.get(path))
+			Right(fileStore.getUsableSpace / fileStore.getTotalSpace.asInstanceOf[Double])
+		} catch {
+			case NonFatal(e) =>
+				Left(e.getMessage)
+		}
 	}
 
 	override def purgeEmptyFolders(path: String): Boolean = {

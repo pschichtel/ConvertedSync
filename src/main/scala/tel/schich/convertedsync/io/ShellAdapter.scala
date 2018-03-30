@@ -94,14 +94,14 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 		script.invoke(Seq("update_previous_core", path, previousCore)) == 0
 	}
 
-	override def relativeFreeSpace(path: String): Double = {
+	override def relativeFreeSpace(path: String): Either[String, Double] = {
 		val (result, stdOut) = script.invokeAndRead(Seq("freespace", path))
-		if (result == 0 && stdOut.contains(',')) {
-			val Array(free, total) = stdOut.trim.split(",", 2).map(_.toDouble)
-			free / total
-		} else {
-			throw new Exception(s"Unable to parse free space: $stdOut")
-		}
+		if (result == 0) {
+			if (stdOut.contains(',')) {
+				val Array(free, total) = stdOut.trim.split(",", 2).map(_.toDouble)
+				Right(free / total)
+			} else Left(s"Unable to parse free space: $stdOut")
+		} else Left("free space command failed!")
 	}
 
 	override def purgeEmptyFolders(path: String): Boolean = {
