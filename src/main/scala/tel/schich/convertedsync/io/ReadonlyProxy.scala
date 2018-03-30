@@ -41,7 +41,7 @@ class ReadonlyProxy(slave: IOAdapter, succeedWrite: Boolean = false) extends IOA
 	override def mkdirs(path: String): Boolean =
 		logAndReturn("mkdirs", path)
 
-	override def relativeFreeSpace(path: String): Double =
+	override def relativeFreeSpace(path: String): Either[String, Double] =
 		slave.relativeFreeSpace(path)
 
 	override def purgeEmptyFolders(path: String): Boolean =

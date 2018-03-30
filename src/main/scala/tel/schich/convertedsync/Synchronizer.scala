@@ -110,7 +110,7 @@ object Synchronizer {
 		}
 		if (failures.nonEmpty) {
 			println("Conversion failures:")
-			for (fail <- failures) {
+			for (fail <- failures.seq.sorted) {
 				println(s"\t${fail.sourceFile.fullPath}: ${fail.reason}")
 			}
 		}
@@ -121,7 +121,7 @@ object Synchronizer {
 		}
 
 		println("Done!")
-		true
+		failures.nonEmpty
 	}
 
 	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile, existing: Option[FileInfo]): ConversionResult = {
@@ -170,7 +170,7 @@ object Synchronizer {
 			if (!Files.exists(fullPath)) Failure(f, "The file was queued for conversion, but disappeared!")
 			else {
 
-				val (success, t) = if (f.mime == rule.targetMime && !conf.force) {
+				val (result, t) = if (f.mime == rule.targetMime && !conf.force) {
 					println("The input file mime type matches the target mime type, copying...")
 					time() {
 						if (intermediateAdapter.copy(f.fullPath, intermediateTarget)) Success
@@ -185,16 +185,19 @@ object Synchronizer {
 					}
 				}
 
-				success.flatMap {
-					if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
-						local.delete(intermediateTarget)
-					}
+				if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
+					local.delete(intermediateTarget)
+				}
+
+				result flatMap {
 					if (target == expectedTarget) {
-						remote.rename(tmpTarget, target)
+						if (remote.rename(tmpTarget, target)) Success
+						else Failure(f, "Failed to rename the file to the final name!")
 					} else {
-						remote.delete(target)
-						remote.rename(tmpTarget, expectedTarget)
+						if (remote.delete(target) && remote.rename(tmpTarget, expectedTarget)) Success
+						else Failure(f, "Failed to delete the existing file and move over the new version!")
 					}
+				} flatMap {
 					local.updatePreviousCore(f.fullPath, f.core)
 					println(s"Conversion completed after $t seconds: ${f.fullPath}\n"
 						+ s"    Now at: $target")

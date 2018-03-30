@@ -16,9 +16,11 @@ import java.nio.file.attribute.FileTime
 case class FileInfo(base: String, fullPath: String,
                     fileName: String, core: String,
                     previousCore: Option[String], extension: String,
-                    lastModified: FileTime, mime: String) {
+                    lastModified: FileTime, mime: String) extends Ordered[FileInfo] {
 
 	def reframeCore(base: String, ext: String): String = {
 		base + core + ext
 	}
+
+	override def compare(that: FileInfo): Int = this.core.compareTo(that.core)
 }
