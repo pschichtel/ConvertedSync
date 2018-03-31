@@ -2,6 +2,9 @@ package tel.schich.convertedsync.io
 
 import java.nio.file.attribute.FileTime
 
+import tel.schich.convertedsync.ConversionRule
+import tel.schich.convertedsync.Util.OrderedFileTime
+
 /** File metadata used during the conversion process.
   *
   * @param base         the base directory
@@ -23,4 +26,10 @@ case class FileInfo(base: String, fullPath: String,
 	}
 
 	override def compare(that: FileInfo): Int = this.core.compareTo(that.core)
+}
+
+case class ConvertibleFile(sourceFile: FileInfo, rule: ConversionRule, existingTarget: Option[FileInfo]) {
+	val isRenamed: Boolean = existingTarget.exists(_.core != sourceFile.core)
+	val isInvalid: Boolean = existingTarget.forall(_.lastModified < sourceFile.lastModified)
+	val mimeMismatched: Boolean = existingTarget.exists(!_.mime.equalsIgnoreCase(rule.targetMime))
 }

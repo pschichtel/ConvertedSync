@@ -1,7 +1,6 @@
 package tel.schich.convertedsync
 
 import java.nio.file._
-import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit.SECONDS
 
 import org.apache.tika.config.TikaConfig
@@ -13,10 +12,6 @@ import tel.schich.convertedsync.mime.TikaMimeDetector
 object Synchronizer {
 
 	val TempSuffix: String = ".temporary"
-
-	implicit class OrderedFileTime(private val self: FileTime) extends AnyVal with Ordered[FileTime] {
-		override def compare(that: FileTime): Int = self.compareTo(that)
-	}
 
 	private def syncFromTo(conf: Config, local: IOAdapter, remote: IOAdapter): Boolean = {
 
@@ -32,12 +27,21 @@ object Synchronizer {
 				.foreach(System.setProperty(_: String, "" + conf.threadCount))
 		}
 
+		println(s"Scanning the target directory: ${conf.target} ...")
+		val (targetFiles, targetScanTime) = time(SECONDS) {
+			remote.files(conf.target.toString)
+		}
+		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
+
 		println(s"Scanning the source directory: ${conf.source} ...")
 		val (sourceFiles, sourceScanTime) = time(SECONDS) {
+			val targetLookup = targetFiles.map(x => (x.core, x)).toMap
+
 			local.files(conf.source.toString).flatMap { f =>
 				findRule(f.mime, conf.rules) match {
 					case Some(rule) =>
-						Some(ConvertibleFile(f, rule))
+						val existingFile = targetLookup.get(f.core).orElse(f.previousCore.flatMap(targetLookup.get))
+						Some(ConvertibleFile(f, rule, existingFile))
 					case None =>
 						println(s"No applicable conversion rule for file: ${f.fullPath} (${f.mime})")
 						None
@@ -47,38 +51,27 @@ object Synchronizer {
 		println(s"Found ${sourceFiles.length} source files in $sourceScanTime seconds.")
 
 		println("File type distribution:")
-		sourceFiles.groupBy(cf => cf.file.mime).foreach {
+		sourceFiles.groupBy(cf => cf.sourceFile.mime).foreach {
 			case (group, files) => println(s"\t$group -> ${files.length}")
 		}
-
-		println(s"Scanning the target directory: ${conf.target} ...")
-		val (targetFiles, targetScanTime) = time(SECONDS) {
-			remote.files(conf.target.toString)
-		}
-		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
-		val targetLookup = targetFiles.map(x => (x.core, x)).toMap
 
 		val (filesToProcess, filesToRename, validFiles) = if (conf.reEncodeAll) (sourceFiles, Nil, Nil)
 		else {
 			println("Detecting files to be processed ...")
 			val (process, dontProcess) = sourceFiles.partition { f =>
-				targetLookup.get(f.file.core).fold(true) { target =>
-					target.lastModified < f.file.lastModified || conf.enforceMime && mimeConflict(f, target)
-				}
+				f.isInvalid || conf.enforceMime && f.mimeMismatched
 			}
 
 			println("Detecting files to be renamed ...")
 			val (rename, valid) = dontProcess.partition { f =>
-				f.file.previousCore.flatMap(targetLookup.get).fold(false) { target =>
-					target.lastModified < f.file.lastModified
-				}
+				f.isRenamed
 			}
 			(process, rename, valid)
 		}
 
 		if (conf.purge) {
 			println("Purging obsolete files from the target directory ...")
-			val handledFiles = (validFiles ++ filesToProcess).map(_.file.core).toSet ++ filesToRename.flatMap(_.file.previousCore)
+			val handledFiles = (validFiles ++ filesToProcess).map(_.sourceFile.core).toSet ++ filesToRename.flatMap(_.sourceFile.previousCore)
 			val filesToPurge = targetFiles.filterNot(f => handledFiles.contains(f.core))
 
 			for (f <- filesToPurge) {
@@ -89,22 +82,21 @@ object Synchronizer {
 
 		for {
 			f <- filesToRename
-			previousCore <- f.file.previousCore
-			target <- targetLookup.get(previousCore)
+			target <- f.existingTarget
 		} {
-			val newTarget = f.file.reframeCore(target.base, target.extension)
+			val newTarget = f.sourceFile.reframeCore(target.base, target.extension)
 			val newTargetParent = Util.parentPath(newTarget, remote.separator)
 			if (!remote.exists(newTargetParent)) {
 				remote.mkdirs(newTargetParent)
 			}
 			if (remote.rename(target.fullPath, newTarget)) {
-				local.updatePreviousCore(f.file.fullPath, f.file.core)
+				local.updatePreviousCore(f.sourceFile.fullPath, f.sourceFile.core)
 			}
 		}
 
 		println(s"${filesToProcess.length} source files will be synchronized to the target folder.")
 
-		val failures = filesToProcess.map(f => convert(conf, local, remote)(f, targetLookup.get(f.file.core))).flatMap {
+		val failures = filesToProcess.map(convert(conf, local, remote)).flatMap {
 			case Success => None
 			case f: Failure => Some(f)
 		}
@@ -127,9 +119,9 @@ object Synchronizer {
 	def displayIndex(i: Int, len: Int): String =
 		s"${(i + 1).toString.reverse.padTo(len.toString.length, ' ').reverse}."
 
-	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile, existing: Option[FileInfo]): ConversionResult = {
+	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile): ConversionResult = {
 
-		val ConvertibleFile(f, rule) = file
+		val ConvertibleFile(f, rule, existing) = file
 		// rebase source-core onto the target base
 		val rebasedCore = conf.target + local.separator + f.core
 		// the expected target path given the source file and the conversion rule
@@ -226,10 +218,6 @@ object Synchronizer {
 				System.err.println("The given IO adapter could not be resolved.")
 				false
 		}
-	}
-
-	private def mimeConflict(sourceFile: ConvertibleFile, existingFile: FileInfo) = {
-		sourceFile.rule.targetMime.equalsIgnoreCase(existingFile.mime)
 	}
 
 	private def runConverter(conf: Config, sourceFile: FileInfo, targetFile: String, rule: ConversionRule): ConversionResult = {

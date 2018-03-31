@@ -1,6 +1,7 @@
 package tel.schich.convertedsync
 
 import java.nio.file._
+import java.nio.file.attribute.FileTime
 
 /**
   * Created by phillip on 21.06.17.
@@ -52,4 +53,8 @@ object Util {
 	}
 
 	def splitLines(in: String): IndexedSeq[String] = in.split("(?:\r\n|\r|\n)", -1)
+
+	implicit class OrderedFileTime(private val self: FileTime) extends AnyVal with Ordered[FileTime] {
+		override def compare(that: FileTime): Int = self.compareTo(that)
+	}
 }
