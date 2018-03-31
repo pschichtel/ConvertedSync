@@ -144,60 +144,63 @@ object Synchronizer {
 			if (intermediateTarget.equals(tmpTarget)) remote
 			else local
 
-		val dir = Util.parentPath(target, remote.separator)
-		if (!remote.exists(dir)) {
-			remote.mkdirs(dir)
-		}
+		val fullPath = Paths.get(f.fullPath)
 
-		val relativeFreeSpace = remote.relativeFreeSpace(dir) match {
-			case Left(error) =>
-				println(s"Failed to detect free space on target: $error")
-				Double.MaxValue
-			case Right(freeSpace) =>
-				println("Free space on target file system: %1.2f%%".format(freeSpace))
-				freeSpace
-		}
-
-		if (relativeFreeSpace < conf.lowSpaceThreshold) Failure(f, s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)")
+		if (!Files.exists(fullPath)) Failure(f, "The file was queued for conversion, but disappeared!")
 		else {
-			val fullPath = Paths.get(f.fullPath)
 
-			if (!Files.exists(fullPath)) Failure(f, "The file was queued for conversion, but disappeared!")
-			else {
-
-				val (result, t) = if (f.mime == rule.targetMime && !conf.force) {
-					println("The input file mime type matches the target mime type, copying...")
-					time() {
-						if (intermediateAdapter.copy(f.fullPath, intermediateTarget)) Success
-						else Failure(f, "Failed to copy the file over to the target!")
+			val (result, t) = if (f.mime == rule.targetMime && !conf.force) {
+				println("The input file mime type matches the target mime type, copying...")
+				time() {
+					if (intermediateAdapter.copy(f.fullPath, intermediateTarget)) Success
+					else Failure(f, "Failed to copy the file over to the target!")
+				}
+			} else {
+				time() {
+					runConverter(conf, f, intermediateTarget, rule).flatMap {
+						if (intermediateAdapter.exists(intermediateTarget)) Success
+						else Failure(f, s"Converter did not generate file $intermediateTarget")
 					}
+				}
+			}
+
+			if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
+				local.delete(intermediateTarget)
+			}
+			val dir = Util.parentPath(target, remote.separator)
+
+			result flatMap {
+				if (!remote.exists(dir)) {
+					if (remote.mkdirs(dir)) Success
+					else Failure(f, "Failed to create the target directory")
+				} else Success
+			} flatMap {
+
+				val relativeFreeSpace = remote.relativeFreeSpace(dir) match {
+					case Left(error) =>
+						println(s"Failed to detect free space on target: $error")
+						Double.MaxValue
+					case Right(freeSpace) =>
+						println("Free space on target file system: %1.2f%%".format(freeSpace))
+						freeSpace
+				}
+
+				if (relativeFreeSpace < conf.lowSpaceThreshold) Failure(f, s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)")
+				else Success
+
+			} flatMap {
+				if (target == expectedTarget) {
+					if (remote.rename(tmpTarget, target)) Success
+					else Failure(f, "Failed to rename the file to the final name!")
 				} else {
-					time() {
-						runConverter(conf, f, intermediateTarget, rule).flatMap {
-							if (intermediateAdapter.exists(intermediateTarget)) Success
-							else Failure(f, s"Converter did not generate file $intermediateTarget")
-						}
-					}
+					if (remote.delete(target) && remote.rename(tmpTarget, expectedTarget)) Success
+					else Failure(f, "Failed to delete the existing file and move over the new version!")
 				}
-
-				if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
-					local.delete(intermediateTarget)
-				}
-
-				result flatMap {
-					if (target == expectedTarget) {
-						if (remote.rename(tmpTarget, target)) Success
-						else Failure(f, "Failed to rename the file to the final name!")
-					} else {
-						if (remote.delete(target) && remote.rename(tmpTarget, expectedTarget)) Success
-						else Failure(f, "Failed to delete the existing file and move over the new version!")
-					}
-				} flatMap {
-					local.updatePreviousCore(f.fullPath, f.core)
-					println(s"Conversion completed after $t seconds: ${f.fullPath}\n"
-						+ s"    Now at: $target")
-					Success
-				}
+			} flatMap {
+				local.updatePreviousCore(f.fullPath, f.core)
+				println(s"Conversion completed after $t seconds: ${f.fullPath}\n"
+					+ s"    Now at: $target")
+				Success
 			}
 		}
 	}
