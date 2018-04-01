@@ -55,24 +55,24 @@ object Synchronizer {
 			case (group, files) => println(s"\t$group -> ${files.length}")
 		}
 
-		val (filesToProcess, filesToRename, validFiles) = if (conf.reEncodeAll) (sourceFiles, Nil, Nil)
+		val (filesToProcess, filesToRename) = if (conf.reEncodeAll) (sourceFiles, Nil)
 		else {
 			println("Detecting files to be processed ...")
-			val (process, dontProcess) = sourceFiles.partition { f =>
+			val (missingOrInvalid, stillValid) = sourceFiles.partition { f =>
 				f.isInvalid || conf.enforceMime && f.mimeMismatched
 			}
 
 			println("Detecting files to be renamed ...")
-			val (rename, valid) = dontProcess.partition { f =>
+			val rename = stillValid.filter { f =>
 				f.isRenamed
 			}
-			(process, rename, valid)
+			(missingOrInvalid, rename)
 		}
 
 		if (conf.purge) {
 			println("Purging obsolete files from the target directory ...")
-			val handledFiles = (validFiles ++ filesToProcess).map(_.sourceFile.core).toSet ++ filesToRename.flatMap(_.sourceFile.previousCore)
-			val filesToPurge = targetFiles.filterNot(f => handledFiles.contains(f.core))
+			val targets = sourceFiles.flatMap(_.existingTarget).map(_.core).toSet
+			val filesToPurge = targetFiles.filterNot(f => targets.contains(f.core))
 
 			for (f <- filesToPurge) {
 				remote.delete(f.fullPath)
@@ -84,13 +84,16 @@ object Synchronizer {
 			f <- filesToRename
 			target <- f.existingTarget
 		} {
-			val newTarget = f.sourceFile.reframeCore(target.base, target.extension)
+			println(s"Renaming: ${target.fullPath}")
+			val newTarget = f.sourceFile.reframeCore(remote, target.base, target.extension)
 			val newTargetParent = Util.parentPath(newTarget, remote.separator)
 			if (!remote.exists(newTargetParent)) {
 				remote.mkdirs(newTargetParent)
 			}
 			if (remote.rename(target.fullPath, newTarget)) {
-				local.updatePreviousCore(f.sourceFile.fullPath, f.sourceFile.core)
+				println(s"\tNow at: $newTarget")
+			} else {
+				println("\tRename failed!")
 			}
 		}
 
@@ -103,7 +106,7 @@ object Synchronizer {
 		if (failures.nonEmpty) {
 			println("Conversion failures:")
 			for ((fail, i) <- failures.seq.sorted.zipWithIndex) {
-				println(s"\t${displayIndex(i, failures.length)}. ${fail.sourceFile.fullPath}: ${fail.reason}")
+				println(s"\t${displayIndex(i, failures.length)} ${fail.sourceFile.fullPath}: ${fail.reason}")
 			}
 		}
 
@@ -112,8 +115,22 @@ object Synchronizer {
 			remote.purgeEmptyFolders(conf.target)
 		}
 
+		val coresToUpdate = sourceFiles.flatMap { case ConvertibleFile(f, _, _) =>
+			val coreUpdate = Some((f.fullPath, f.core))
+			f.previousCore match {
+				case Some(previousCore) if f.core != previousCore => coreUpdate
+				case None => coreUpdate
+				case _ => None
+			}
+		}
+
+		if (coresToUpdate.nonEmpty) {
+			println("Storing new location in source files...")
+			coresToUpdate.foreach((local.updatePreviousCore _).tupled)
+		}
+
 		println("Done!")
-		failures.nonEmpty
+		failures.isEmpty
 	}
 
 	def displayIndex(i: Int, len: Int): String =
@@ -122,14 +139,16 @@ object Synchronizer {
 	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile): ConversionResult = {
 
 		val ConvertibleFile(f, rule, existing) = file
-		// rebase source-core onto the target base
-		val rebasedCore = conf.target + local.separator + f.core
+		// rebase source-core onto the target base with given extension
+		val rebase = f.reframeCore(remote, conf.target, _: String)
 		// the expected target path given the source file and the conversion rule
-		val expectedTarget = rebasedCore + '.' + rule.extension
+		val expectedTarget = rebase('.' + rule.extension)
 		// the target either based on the already existing file or on the expected target
 		val target = existing.fold(expectedTarget)(_.fullPath)
+		// the directory the target file will be placed in
+		val targetDirectory = Util.parentPath(target, remote.separator)
 		// a temporary target path on the same file system as the target path
-		val tmpTarget = rebasedCore + TempSuffix
+		val tmpTarget = rebase(TempSuffix)
 		// an intermediate target path on an arbitrary file system
 		val intermediateTarget = conf.intermediateDir.fold(tmpTarget) { d =>
 			val fileName = f.fileName
@@ -167,16 +186,15 @@ object Synchronizer {
 			if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
 				local.delete(intermediateTarget)
 			}
-			val dir = Util.parentPath(target, remote.separator)
 
 			result flatMap {
-				if (!remote.exists(dir)) {
-					if (remote.mkdirs(dir)) Success
+				if (!remote.exists(targetDirectory)) {
+					if (remote.mkdirs(targetDirectory)) Success
 					else Failure(f, "Failed to create the target directory")
 				} else Success
 			} flatMap {
 
-				val relativeFreeSpace = remote.relativeFreeSpace(dir) match {
+				val relativeFreeSpace = remote.relativeFreeSpace(targetDirectory) match {
 					case Left(error) =>
 						println(s"Failed to detect free space on target: $error")
 						Double.MaxValue
@@ -193,13 +211,14 @@ object Synchronizer {
 					if (remote.rename(tmpTarget, target)) Success
 					else Failure(f, "Failed to rename the file to the final name!")
 				} else {
-					if (remote.delete(target) && remote.rename(tmpTarget, expectedTarget)) Success
-					else Failure(f, "Failed to delete the existing file and move over the new version!")
+					if (remote.delete(target)) {
+						if (remote.rename(tmpTarget, expectedTarget)) Success
+						else Failure(f, "Failed to move over the new version!")
+					} else Failure(f, "Failed to delete the existing file!")
 				}
 			} flatMap {
-				local.updatePreviousCore(f.fullPath, f.core)
 				println(s"Conversion completed after $t seconds: ${f.fullPath}\n"
-					+ s"    Now at: $target")
+					+ s"\tNow at: $target")
 				Success
 			}
 		}
@@ -243,7 +262,7 @@ object Synchronizer {
 				ShellScript.resolve(path) match {
 					case Some(script) =>
 						val mime = new TikaMimeDetector(TikaConfig.getDefaultConfig, false, conf.warnWrongExtension)
-						Some(new ShellAdapter(mime, script, localAdapter.separator))
+						Some(new ShellAdapter(mime, script))
 					case _ => None
 				}
 			case None => Some(localAdapter)

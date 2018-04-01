@@ -21,11 +21,17 @@ case class FileInfo(base: String, fullPath: String,
                     previousCore: Option[String], extension: String,
                     lastModified: FileTime, mime: String) extends Ordered[FileInfo] {
 
-	def reframeCore(base: String, ext: String): String = {
-		base + core + ext
+	def reframeCore(adapter: IOAdapter, base: String, ext: String): String = {
+		adapter.join(base, localizedCore(adapter)) + ext
 	}
 
+	def localizedCore(adapter: IOAdapter): String = core.replace(FileInfo.CoreSeparator, adapter.separator)
+
 	override def compare(that: FileInfo): Int = this.core.compareTo(that.core)
+}
+
+object FileInfo {
+	var CoreSeparator = '/'
 }
 
 case class ConvertibleFile(sourceFile: FileInfo, rule: ConversionRule, existingTarget: Option[FileInfo]) {

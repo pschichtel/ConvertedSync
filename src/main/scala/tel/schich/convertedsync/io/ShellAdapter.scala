@@ -8,7 +8,7 @@ import tel.schich.convertedsync.{ShellScript, Util}
 
 import scala.collection.parallel.ParSeq
 
-class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char) extends IOAdapter {
+class ShellAdapter(mime: MimeDetector, script: ShellScript) extends IOAdapter {
 
 	val DefaultSeparator: Char = '/'
 
@@ -56,10 +56,10 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript, localSeparator: Char
 	private def extractCore(base: String, path: String): (String, String) = {
 		val relative = path
 				.substring(base.length)
-				.replace(separator, localSeparator)
-		    	.dropWhile(_ == localSeparator)
+				.replace(separator, FileInfo.CoreSeparator)
+		    	.dropWhile(_ == FileInfo.CoreSeparator)
 
-		val sepPos = relative.lastIndexOf(localSeparator)
+		val sepPos = relative.lastIndexOf(FileInfo.CoreSeparator)
 		relative.lastIndexOf('.') match {
 			case n if n > sepPos => relative.splitAt(n)
 			case _ => (relative, "")

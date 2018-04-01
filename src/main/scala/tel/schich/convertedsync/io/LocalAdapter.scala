@@ -11,7 +11,7 @@ import tel.schich.convertedsync.mime.MimeDetector
 
 import scala.collection.JavaConverters._
 import scala.collection.parallel.ParSeq
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
 class LocalAdapter(mime: MimeDetector) extends IOAdapter
@@ -40,34 +40,44 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 				val strippedName = fileName.substring(0, index)
 				val ext = fileName.substring(index)
 				val parent = relative.getParent
-				if (parent != null) (parent.toString  + File.separatorChar + strippedName, ext)
+				if (parent != null) (parent.toString  + separator + strippedName, ext)
 				else (strippedName, ext)
 
 		}
+		val core =
+			if (separator == FileInfo.CoreSeparator) strippedRelative
+			else strippedRelative.replace(separator, FileInfo.CoreSeparator)
+
 		val lastModifiedTime = Files.getLastModifiedTime(path)
 		val mimeType = mime.detectMime(path.toString, fileName)
 
 		FileInfo(base.toString, path.toString,
-			fileName, strippedRelative,
+			fileName, core,
 			previousCore(path), extension,
 			lastModifiedTime, mimeType)
 	}
 
 	private def attributeView(path: Path): Option[UserDefinedFileAttributeView] = {
-		val store = Files.getFileStore(path)
-		val viewType = classOf[UserDefinedFileAttributeView]
-		if (store.supportsFileAttributeView(viewType)) {
-			Some(Files.getFileAttributeView(path, viewType))
-		} else if (store.`type`() == "ext4") {
-			try {
-				Some(Ext4AttrAccess.getView(path))
-			} catch {
-				case NonFatal(e) =>
-					println("Failed to create filesystem view for attribute access!")
-					e.printStackTrace()
-					None
-			}
-		} else None
+		Try(Files.getFileStore(path)) match {
+			case Success(store) =>
+				val viewType = classOf[UserDefinedFileAttributeView]
+				if (store.supportsFileAttributeView(viewType)) {
+					Some(Files.getFileAttributeView(path, viewType))
+				} else if (store.`type`() == "ext4") {
+					try {
+						Some(Ext4AttrAccess.getView(path))
+					} catch {
+						case NonFatal(e) =>
+							println("Failed to create filesystem view for attribute access!")
+							e.printStackTrace()
+							None
+					}
+				} else None
+			case Failure(e) =>
+				println(s"Failed to get file store for path: $path")
+				e.printStackTrace()
+				None
+		}
 	}
 
 	private def setAttribute(path: Path, name: String, value: String): Boolean = {

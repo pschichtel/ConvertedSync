@@ -14,4 +14,13 @@ trait IOAdapter {
 	def mkdirs(path: String): Boolean
 	def relativeFreeSpace(path: String): Either[String, Double]
 	def purgeEmptyFolders(path: String): Boolean
+
+	def join(left: String, right: String): String = {
+		val normLeft =
+			if (left.last == separator) left.dropRight(1)
+			else left
+		val normRight = right.dropWhile(_ == separator)
+
+		normLeft + separator + normRight
+	}
 }
