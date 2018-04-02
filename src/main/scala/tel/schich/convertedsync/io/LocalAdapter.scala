@@ -63,15 +63,6 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 				val viewType = classOf[UserDefinedFileAttributeView]
 				if (store.supportsFileAttributeView(viewType)) {
 					Some(Files.getFileAttributeView(path, viewType))
-				} else if (store.`type`() == "ext4") {
-					try {
-						Some(Ext4AttrAccess.getView(path))
-					} catch {
-						case NonFatal(e) =>
-							println("Failed to create filesystem view for attribute access!")
-							e.printStackTrace()
-							None
-					}
 				} else None
 			case Failure(e) =>
 				println(s"Failed to get file store for path: $path")
