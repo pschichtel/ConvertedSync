@@ -5,9 +5,9 @@ target="$2"
 
 mp3_quality="${MP3_QUALITY:-2}"
 
-target_i="-16"
-target_tp="-1.5"
-target_lra="11"
+target_i="-12"
+target_tp="-1.0"
+target_lra="7"
 
 norm_targets="I=${target_i}:TP=${target_tp}:LRA=${target_lra}"
 
