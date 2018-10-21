@@ -199,7 +199,7 @@ object Synchronizer {
 						println(s"Failed to detect free space on target: $error")
 						Double.MaxValue
 					case Right(freeSpace) =>
-						println("Free space on target file system: %1.2f%%".format(freeSpace))
+						println("Free space on target file system: %1.1f%%".format(freeSpace * 100))
 						freeSpace
 				}
 
@@ -217,7 +217,7 @@ object Synchronizer {
 					} else Failure(f, "Failed to delete the existing file!")
 				}
 			} flatMap {
-				println(s"Conversion completed after $t seconds: ${f.fullPath}\n"
+				println(s"Conversion completed after ${t}ms: ${f.fullPath}\n"
 					+ s"\tNow at: $target")
 				Success
 			}
