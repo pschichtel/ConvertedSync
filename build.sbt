@@ -2,7 +2,7 @@ name := "ConvertedSync"
 
 version := "1.0"
 
-scalaVersion := "2.12.7"
+scalaVersion := "2.12.8"
 
 libraryDependencies ++= Seq(
     "org.apache.tika" % "tika-core" % "1.19.1",
