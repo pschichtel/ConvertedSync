@@ -5,7 +5,7 @@ version := "1.0"
 scalaVersion := "2.12.8"
 
 libraryDependencies ++= Seq(
-    "org.apache.tika" % "tika-core" % "1.19.1",
+    "org.apache.tika" % "tika-core" % "1.20",
     "com.github.scopt" %% "scopt" % "3.7.0"
 )
 
