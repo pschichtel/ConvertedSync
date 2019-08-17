@@ -9,7 +9,7 @@ import java.nio.file.attribute.UserDefinedFileAttributeView
 import tel.schich.convertedsync.Util
 import tel.schich.convertedsync.mime.MimeDetector
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.parallel.ParSeq
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
@@ -22,10 +22,11 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 
 	override def files(base: String): ParSeq[FileInfo] = {
 		val basePath = Paths.get(base)
-		Files.walk(basePath)
+		val fileSeq = Files.walk(basePath)
 			.iterator()
 			.asScala
-			.toSeq.par
+			.toSeq
+		ParSeq.fromSpecific(fileSeq)
 			.filter(Files.isRegularFile(_))
 			.map(pathToFileInfo(basePath, _))
 	}

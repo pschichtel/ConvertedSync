@@ -7,6 +7,7 @@ import tel.schich.convertedsync.mime.MimeDetector
 import tel.schich.convertedsync.{ShellScript, Util}
 
 import scala.collection.parallel.ParSeq
+import scala.collection.parallel.immutable.ParVector
 
 class ShellAdapter(mime: MimeDetector, script: ShellScript) extends IOAdapter {
 
@@ -43,9 +44,9 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript) extends IOAdapter {
 	override def files(base: String): ParSeq[FileInfo] = {
 		script.invokeAndRead(Seq("list", base)) match {
 			case (0, out) =>
-				Util.splitLines(out).par.filter(_.nonEmpty).flatMap(lineToFileInfo(base, _))
+				ParSeq.fromSpecific(Util.splitLines(out)).filter(_.nonEmpty).flatMap(lineToFileInfo(base, _))
 			case _ =>
-				Vector.empty.par
+				ParVector.empty
 		}
 	}
 

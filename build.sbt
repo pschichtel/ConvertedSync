@@ -5,9 +5,12 @@ version := "1.0"
 scalaVersion := "2.13.0"
 
 libraryDependencies ++= Seq(
-    "org.apache.tika" % "tika-core" % "1.20",
-    "com.github.scopt" % "scopt_2.12" % "3.7.0"
+    "org.scala-lang.modules" %% "scala-parallel-collections" % "0.2.0",
+    "org.apache.tika" % "tika-core" % "1.22",
+    "com.github.scopt" %% "scopt" % "4.0.0-RC2"
 )
 
 mainClass in assembly := Some("tel.schich.convertedsync.Main")
+
+scalacOptions ++= Seq("unchecked", "-deprecation")
     

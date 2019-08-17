@@ -9,6 +9,8 @@ import tel.schich.convertedsync.Timing.time
 import tel.schich.convertedsync.io._
 import tel.schich.convertedsync.mime.TikaMimeDetector
 
+import scala.collection.parallel.ParSeq
+
 object Synchronizer {
 
 	val TempSuffix: String = ".temporary"
@@ -55,7 +57,7 @@ object Synchronizer {
 			case (group, files) => println(s"\t$group -> ${files.length}")
 		}
 
-		val (filesToProcess, filesToRename) = if (conf.reEncodeAll) (sourceFiles, Nil)
+		val (filesToProcess, filesToRename: ParSeq[ConvertibleFile]) = if (conf.reEncodeAll) (sourceFiles, Nil)
 		else {
 			println("Detecting files to be processed ...")
 			val (missingOrInvalid, stillValid) = sourceFiles.partition { f =>
@@ -142,7 +144,7 @@ object Synchronizer {
 		// rebase source-core onto the target base with given extension
 		val rebase = f.reframeCore(remote, conf.target, _: String)
 		// the expected target path given the source file and the conversion rule
-		val expectedTarget = rebase('.' + rule.extension)
+		val expectedTarget = rebase(s".${rule.extension}")
 		// the target either based on the already existing file or on the expected target
 		val target = existing.fold(expectedTarget)(_.fullPath)
 		// the directory the target file will be placed in
@@ -247,7 +249,7 @@ object Synchronizer {
 		ShellScript.resolve(conf.convertersDir.resolve(rule.converter), !conf.silenceConverter) match {
 			case Some(script) =>
 				println(s"Applying converter: ${script.executable}")
-				val status = script.invoke(Array(sourceFile.fullPath, targetFile))
+				val status = script.invoke(Vector(sourceFile.fullPath, targetFile))
 				if (status != 0) {
 					Failure(sourceFile, s"Converter for ${sourceFile.mime} was not successful: $status")
 				} else Success

@@ -40,63 +40,63 @@ object Config {
 
 		head("ConvertedSync")
 
-		opt[Path]('s', "source-path") required() valueName "<path>" text "The source path for the synchronization." action { (path, config) =>
+		opt[Path]('s', "source-path").required().valueName("<path>").text("The source path for the synchronization.").action { (path, config) =>
 			config.copy(source = path)
 		}
 
-		opt[String]('t', "target-path") required() valueName "<path>" text "The target path for the synchronization." action { (path, config) =>
+		opt[String]('t', "target-path").required().valueName("<path>").text("The target path for the synchronization.").action { (path, config) =>
 			config.copy(target = path)
 		}
 
-		opt[Unit]("re-encode-all") text "Re-encode already existing files in the target directory." action { (_, config) =>
+		opt[Unit]("re-encode-all").text("Re-encode already existing files in the target directory.").action { (_, config) =>
 			config.copy(reEncodeAll = true)
 		}
 
-		opt[Path]("converters-dir") valueName "<path>" text "The base path of the conversion programs." action { (path, config) =>
+		opt[Path]("converters-dir").valueName("<path>").text("The base path of the conversion programs.").action { (path, config) =>
 			config.copy(convertersDir = path.toRealPath())
 		}
 
-		opt[Unit]("purge") text "Delete files that are available in the target folder, but not in the source folder." action {(_, config) =>
+		opt[Unit]("purge").text("Delete files that are available in the target folder, but not in the source folder.").action { (_, config) =>
 			config.copy(purge = true)
 		}
 
-		opt[Unit]("enforce-mime") text "Re-encode files that are unchanged, but don't have the requested mime type." action {(_, config) =>
+		opt[Unit]("enforce-mime").text("Re-encode files that are unchanged, but don't have the requested mime type.").action { (_, config) =>
 			config.copy(enforceMime = true)
 		}
 
-		opt[Unit]("force") text "Force conversion even if the mime-type of source and target match." action {(_, config) =>
+		opt[Unit]("force").text("Force conversion even if the mime-type of source and target match.").action { (_, config) =>
 			config.copy(force = true)
 		}
 
-		opt[Unit]("mime-from-extension") text "Use only the filename extension for mime detection (may be imprecise)." action {(_, config) =>
+		opt[Unit]("mime-from-extension").text("Use only the filename extension for mime detection (may be imprecise).").action { (_, config) =>
 			config.copy(mimeFromExtension = true)
 		}
 
-		opt[Unit]("no-extension-validation") text "Verify if the filename extension matches the mime type (relies on mime detection precision)." action {(_, config) =>
+		opt[Unit]("no-extension-validation").text("Verify if the filename extension matches the mime type (relies on mime detection precision).").action { (_, config) =>
 			config.copy(warnWrongExtension = false)
 		}
 
-		opt[Int]('t', "threads") valueName "<# threads>" text "The number of threads to use for the conversion process. Limit this to your number of CPU cores unless the target directory is slow." action {(n, config) =>
+		opt[Int]('t', "threads").valueName("<# threads>").text("The number of threads to use for the conversion process. Limit this to your number of CPU cores unless the target directory is slow.").action { (n, config) =>
 			config.copy(threadCount = n)
 		}
 
-		opt[Path]("intermediate-dir") valueName "<path>" text "Set this in case the target path can not be directly converted to." action {(path, config) =>
+		opt[Path]("intermediate-dir").valueName("<path>").text("Set this in case the target path can not be directly converted to.").action { (path, config) =>
 			config.copy(intermediateDir = Some(path))
 		}
 
-		opt[Unit]('q', "silence-converter") text "Don't forward the output of the conversion processes." action {(_, config) =>
+		opt[Unit]('q', "silence-converter").text("Don't forward the output of the conversion processes.").action { (_, config) =>
 			config.copy(silenceConverter = true)
 		}
 
-		opt[Int]("low-disk-space-threshold") text "The free disk space percentage that may not be used for synced files (integer in [0, 100])" action {(i, config) =>
+		opt[Int]("low-disk-space-threshold").text("The free disk space percentage that may not be used for synced files (integer in [0, 100])").action { (i, config) =>
 			config.copy(lowSpaceThreshold = i / 100d)
 		}
 
-		opt[Path]("io-adapter") valueName "<path>" text "Use the given IO adapter executable. This option implies --mime-from-extension." action {(adapter, conf) =>
+		opt[Path]("io-adapter").valueName("<path>").text("Use the given IO adapter executable. This option implies --mime-from-extension.").action { (adapter, conf) =>
 			conf.copy(adapter = Some(adapter), mimeFromExtension = true)
 		}
 
-		opt[ConversionRule]("rule") minOccurs 1 unbounded() valueName "<source mime:target mime:extension:converter>" text "Defines a conversion rule by source mime, conversion script and target extension." action {(rule, conf) =>
+		opt[ConversionRule]("rule").minOccurs(1).unbounded().valueName("<source mime:target mime:extension:converter>").text("Defines a conversion rule by source mime, conversion script and target extension.").action { (rule, conf) =>
 			conf.copy(rules = conf.rules :+ rule)
 		}
 

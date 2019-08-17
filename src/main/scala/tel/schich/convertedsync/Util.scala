@@ -3,9 +3,8 @@ package tel.schich.convertedsync
 import java.nio.file._
 import java.nio.file.attribute.FileTime
 
-/**
-  * Created by phillip on 21.06.17.
-  */
+import scala.collection.immutable.ArraySeq
+
 object Util {
 	def moveFile(from: Path, to: Path): Boolean = {
 		try {
@@ -52,7 +51,8 @@ object Util {
 		}
 	}
 
-	def splitLines(in: String): IndexedSeq[String] = in.split("(?:\r\n|\r|\n)", -1)
+	def splitLines(in: String): IndexedSeq[String] =
+		ArraySeq.unsafeWrapArray(in.split("(?:\r\n|\r|\n)", -1))
 
 	implicit class OrderedFileTime(private val self: FileTime) extends AnyVal with Ordered[FileTime] {
 		override def compare(that: FileTime): Int = self.compareTo(that)

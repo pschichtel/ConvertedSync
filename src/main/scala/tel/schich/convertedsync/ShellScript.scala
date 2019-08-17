@@ -50,7 +50,7 @@ object ShellScript {
 		val pathExt = sys.env.getOrElse("PATHEXT", "")
 		val possiblePaths = if (pathExt.length > 0) {
 			val parent = path.getParent
-			val name = path.getFileName
+			val name = path.getFileName.toString
 			pathExt.split(File.pathSeparatorChar).map(ext => parent.resolve(name + ext)).toSeq :+ path
 		} else Seq(path)
 

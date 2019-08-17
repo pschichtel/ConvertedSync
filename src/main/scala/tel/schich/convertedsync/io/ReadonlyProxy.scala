@@ -6,11 +6,11 @@ class ReadonlyProxy(slave: IOAdapter, succeedWrite: Boolean = false) extends IOA
 
 	private def logAndReturn(method: String, args: Any*): Boolean = {
 		val argsStr = args.map {
-			case a: String => '"' + a + '"'
+			case a: String => "\"" + a + "\""
 			case a => a.toString
 		}.mkString(", ")
 
-		println(slave.getClass.getSimpleName + '.' + method + '(' + argsStr + ") = " + succeedWrite)
+		println(s"${slave.getClass.getSimpleName}.$method($argsStr) = $succeedWrite")
 		succeedWrite
 	}
 
