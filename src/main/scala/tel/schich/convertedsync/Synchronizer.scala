@@ -31,7 +31,7 @@ object Synchronizer {
 
 		println(s"Scanning the target directory: ${conf.target} ...")
 		val (targetFiles, targetScanTime) = time(SECONDS) {
-			remote.files(conf.target.toString)
+			remote.files(conf.target)
 		}
 		println(s"Found ${targetFiles.size} files in the target directory in $targetScanTime seconds.")
 
@@ -80,6 +80,9 @@ object Synchronizer {
 				remote.delete(f.fullPath)
 				println(s"Purged ${f.fullPath} (${f.mime})")
 			}
+
+			println("Purge empty directories...")
+			remote.purgeEmptyFolders(conf.target)
 		}
 
 		for {
@@ -110,11 +113,6 @@ object Synchronizer {
 			for ((fail, i) <- failures.seq.sorted.zipWithIndex) {
 				println(s"\t${displayIndex(i, failures.length)} ${fail.sourceFile.fullPath}: ${fail.reason}")
 			}
-		}
-
-		if (conf.purge) {
-			println("Purge empty directories...")
-			remote.purgeEmptyFolders(conf.target)
 		}
 
 		val coresToUpdate = sourceFiles.flatMap { case ConvertibleFile(f, _, _) =>
