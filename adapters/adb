@@ -5,11 +5,11 @@ echo_err()
     (>&2 echo "$@")
 }
 
-ADB_BIN="${ADB_BIN:-"$(which adb)"}"
+ADB_BIN="${ADB_BIN:-"$(command -v adb)"}"
 ADB_SELECT_DEVICE="${ADB_SELECT_DEVICE:-""}"
 
 selection=""
-if [[ ! -z "$ADB_SELECT_DEVICE" ]]
+if [[ -n "$ADB_SELECT_DEVICE" ]]
 then
     device_id="$(adb devices -l | grep -P '\sdevice\s' | grep -i "$ADB_SELECT_DEVICE" | grep -oP '^\S+')"
     if [[ -z "$device_id" ]]
@@ -111,7 +111,8 @@ free_space()
 {
     local result
     local path="${1?no file path given!}"
-    local out="$(adb_shell df -k "$(esc "$path")")"
+    local out
+    out="$(adb_shell df -k "$(esc "$path")")"
     result=$?
     if [[ "$result" -ne 0 ]]
     then
