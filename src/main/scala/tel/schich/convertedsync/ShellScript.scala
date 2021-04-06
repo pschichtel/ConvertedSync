@@ -48,7 +48,7 @@ case class ShellScript(executable: Path, inheritIO: Boolean) {
 object ShellScript {
 	def resolve(path: Path, inheritIO: Boolean = true): Option[ShellScript] = {
 		val pathExt = sys.env.getOrElse("PATHEXT", "")
-		val possiblePaths = if (pathExt.length > 0) {
+		val possiblePaths = if (pathExt.nonEmpty) {
 			val parent = path.getParent
 			val name = path.getFileName.toString
 			pathExt.split(File.pathSeparatorChar).map(ext => parent.resolve(name + ext)).toSeq :+ path
