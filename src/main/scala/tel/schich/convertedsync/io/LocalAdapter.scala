@@ -138,8 +138,9 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 	}
 
 	override def purgeEmptyFolders(path: String): Boolean = {
-		Files.walk(Paths.get(path))
-			.filter(p => Files.isDirectory(p) && !Files.list(p).findAny().isPresent)
+		val root = Paths.get(path)
+		Files.walk(root)
+			.filter(p => p != root && Files.isDirectory(p) && !Files.list(p).findAny().isPresent)
 			.forEach(Files.delete(_))
 		true
 	}
