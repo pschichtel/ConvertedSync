@@ -1,12 +1,12 @@
 package tel.schich.convertedsync
 
-import java.nio.file._
+import java.nio.file.*
 import java.util.concurrent.TimeUnit.SECONDS
 
 import org.apache.tika.config.TikaConfig
 import tel.schich.convertedsync.ConversionRule.findRule
 import tel.schich.convertedsync.Timing.time
-import tel.schich.convertedsync.io._
+import tel.schich.convertedsync.io.*
 import tel.schich.convertedsync.mime.TikaMimeDetector
 
 import scala.collection.parallel.ParSeq
@@ -163,11 +163,9 @@ object Synchronizer {
 			if (intermediateTarget.equals(tmpTarget)) remote
 			else local
 
-		val fullPath = Paths.get(f.fullPath)
-
-		if (!Files.exists(fullPath)) Failure(f, "The file was queued for conversion, but disappeared!")
+		if (!local.exists(f.fullPath)) Failure(f, "The file was queued for conversion, but disappeared!")
 		else {
-
+			intermediateAdapter.mkdirs(Util.parentPath(intermediateTarget, intermediateAdapter.separator))
 			val (result, t) = if (f.mime == rule.targetMime && !conf.force) {
 				println("The input file mime type matches the target mime type, copying...")
 				time() {

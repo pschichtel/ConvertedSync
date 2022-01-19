@@ -1,15 +1,14 @@
 package tel.schich.convertedsync.io
 
-import java.io.File
+import java.io.{File, IOException}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file._
+import java.nio.file.*
 import java.nio.file.attribute.UserDefinedFileAttributeView
-
 import tel.schich.convertedsync.Util
 import tel.schich.convertedsync.mime.MimeDetector
 
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 import scala.collection.parallel.ParSeq
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
