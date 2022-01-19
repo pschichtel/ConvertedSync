@@ -2,19 +2,16 @@ package tel.schich.convertedsync.mime
 
 import java.io.Closeable
 import java.nio.file.Paths
-
 import org.apache.tika.config.TikaConfig
 import org.apache.tika.io.TikaInputStream
-import org.apache.tika.metadata.{Metadata, TikaMetadataKeys}
+import org.apache.tika.metadata.{Metadata, TikaCoreProperties}
 
 class TikaMimeDetector(tikaConf: TikaConfig, examineFileContent: Boolean, warnWrongExtension: Boolean)
 	extends MimeDetector {
 
-	private val detector = tikaConf.getDetector
-
 	override def detectMime(path: String, fileName: String): String = {
 		val meta = new Metadata
-		meta.set(TikaMetadataKeys.RESOURCE_NAME_KEY, fileName.toString)
+		meta.set(TikaCoreProperties.RESOURCE_NAME_KEY, fileName)
 		val detector = tikaConf.getDetector
 		val stream =
 			if (examineFileContent) TikaInputStream.get(Paths.get(path))
