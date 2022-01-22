@@ -99,8 +99,13 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript) extends IOAdapter {
 		val (result, stdOut) = script.invokeAndRead(Seq("freespace", path))
 		if (result == 0) {
 			if (stdOut.contains(',')) {
-				val Array(free, total) = stdOut.trim.split(",", 2).map(_.toDouble)
-				Right(free / total)
+				try {
+					val Array(free, total) = stdOut.trim.split(",", 2).map(_.toDouble)
+					Right(free / total)
+				} catch {
+					case e: NumberFormatException =>
+						Left(s"Output seems off: ${e.getMessage}")
+				}
 			} else Left(s"Unable to parse free space: $stdOut")
 		} else Left("free space command failed!")
 	}

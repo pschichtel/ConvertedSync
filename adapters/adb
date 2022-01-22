@@ -8,6 +8,8 @@ echo_err()
 ADB_BIN="${ADB_BIN:-"$(command -v adb)"}"
 ADB_SELECT_DEVICE="${ADB_SELECT_DEVICE:-""}"
 
+ADB_STDIN_ARG='"$(cat)"'
+
 selection=""
 if [[ -n "$ADB_SELECT_DEVICE" ]]
 then
@@ -19,11 +21,6 @@ then
     fi
     selection="-s $device_id"
 fi
-
-esc()
-{
-    printf '%q' "$1"
-}
 
 adb_run()
 {
@@ -37,23 +34,39 @@ adb_shell()
     return $?
 }
 
+adb_shell_one_unsafe_arg()
+{
+    local arg="$1"
+    shift 1
+    echo -n "$arg" | adb_run shell "$@"
+    return $?
+}
+
+adb_shell_two_unsafe_args()
+{
+    local arg1="$1"
+    local arg2="$2"
+    shift 2
+    echo -en "${arg1}\0${arg2}" | adb_run shell "$@"
+    return $?
+}
+
 adb_push()
 {
-    adb_run push "$@" > /dev/null
-    return $?
+    adb_run push "$@"
 }
 
 list_files()
 {
     local path="${1?no base path given!}"
-    adb_shell find "$(esc "$path")" -type f -exec stat -c '%Y,%n' '"{}"' '\;'
+    adb_shell_one_unsafe_arg "$path" find "$ADB_STDIN_ARG" -type f -exec stat -c '%Y,%n' '"{}"' '\;'
     return $?
 }
 
 rm_file()
 {
     local path="${1?no file path given!}"
-    adb_shell rm "$(esc "$path")"
+    adb_shell_one_unsafe_arg "$path" rm "$ADB_STDIN_ARG"
     return $?
 }
 
@@ -89,21 +102,21 @@ rename_file()
 {
     local from="${1?no source path given!}"
     local to="${2?no target path given!}"
-    adb_shell mv "$(esc "$from")" "$(esc "$to")"
+    adb_shell_two_unsafe_args "$from" "$to" xargs -0 mv
     return $?
 }
 
 file_exists()
 {
     local path="${1?no file path given!}"
-    adb_shell stat "$(esc "$path")" > /dev/null
+    adb_shell_one_unsafe_arg "$path" stat "$ADB_STDIN_ARG" > /dev/null
     return $?
 }
 
 mkdirs()
 {
     local path="${1?no file path given!}"
-    adb_shell mkdir -p "$(esc "$path")" > /dev/null
+    adb_shell_one_unsafe_arg "$path" mkdir -p "$ADB_STDIN_ARG" > /dev/null
     return $?
 }
 
@@ -112,7 +125,7 @@ free_space()
     local result
     local path="${1?no file path given!}"
     local out
-    out="$(adb_shell df -k "$(esc "$path")")"
+    out="$(adb_shell_one_unsafe_arg "$path" df -k "$ADB_STDIN_ARG")"
     result=$?
     if [[ "$result" -ne 0 ]]
     then
@@ -129,7 +142,7 @@ free_space()
 purge_empty()
 {
     local path="${1?no file path given!}"
-    adb_shell find "$(esc "$path")" -type d -depth -exec rmdir '"{}"' '\;' 2> /dev/null
+    adb_shell_one_unsafe_arg "$path" find "$ADB_STDIN_ARG" -type d -depth -exec rmdir '"{}"' '\;' 2> /dev/null
     return 0
 }
 
