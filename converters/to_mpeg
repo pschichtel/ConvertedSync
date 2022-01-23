@@ -12,8 +12,8 @@ target_lra="7"
 norm_targets="I=${target_i}:TP=${target_tp}:LRA=${target_lra}"
 
 echo "Measuring loudness..."
-output="$(ffmpeg -hide_banner -loglevel info -i "$source" -filter:a loudnorm="$norm_targets":print_format=json -f null - 2>&1)"
-if [[ $? != 0 ]]
+
+if ! output="$(ffmpeg -hide_banner -loglevel info -i "$source" -filter:a loudnorm="$norm_targets":print_format=json -f null - 2>&1)"
 then
     echo "Failed to analyse loudness!"
     echo "$output" >&2
@@ -22,35 +22,41 @@ fi
 results="$(tail -n 12 <<< "$output")"
 #echo "Analysis results:"
 #echo "$results"
-measured_i="$(jq -r .input_i <<< "$results")"
-if [[ $? != 0 ]]
+
+if ! measured_i="$(jq -r .input_i <<< "$results")"
 then
     exit 1
 fi
-measured_lra="$(jq -r .input_lra <<< "$results")"
-if [[ $? != 0 ]]
+
+if ! measured_lra="$(jq -r .input_lra <<< "$results")"
 then
     exit 1
 fi
-measured_tp="$(jq -r .input_tp <<< "$results")"
-if [[ $? != 0 ]]
+
+if ! measured_tp="$(jq -r .input_tp <<< "$results")"
 then
     exit 1
 fi
-measured_thresh="$(jq -r .input_thresh <<< "$results")"
-if [[ $? != 0 ]]
+
+if ! measured_thresh="$(jq -r .input_thresh <<< "$results")"
 then
     exit 1
 fi
-target_offset="$(jq -r .target_offset <<< "$results")"
-if [[ $? != 0 ]]
+
+if ! target_offset="$(jq -r .target_offset <<< "$results")"
 then
     exit 1
 fi
 
 measured="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}:measured_thresh=${measured_thresh}:offset=${target_offset}"
-loudnorm_filter="loudnorm=${norm_targets}:${measured}:linear=true"
+if [[ "$measured_i" =~ ^(-[1-9][0-9]?|0)$ ]] || [[ "$measured_tp" =~ ^[+-]?([0-9]|[1-9][0-9])$ ]]
+then
+    filters=(-filter:a "loudnorm=${norm_targets}:${measured}:linear=true")
+else
+    echo "Skipping loadness normalizion, because measured value went out of range: ${measured}"
+    filters=()
+fi
 
 echo "Transcoding..."
 # explicit output format like "-f mp3" is required as the conversion target will be a temp file.
-ffmpeg -y -i "$source" -hide_banner -loglevel warning -codec:a libmp3lame -q:a "${mp3_quality}" -filter:a "$loudnorm_filter" -codec:v copy -map_metadata 0 -f mp3 -id3v2_version 4 "$target"
+ffmpeg -y -i "$source" -hide_banner -loglevel warning -codec:a libmp3lame -q:a "${mp3_quality}" "${filters[@]}" -codec:v copy -map_metadata 0 -f mp3 -id3v2_version 4 -write_id3v1 1 "$target"
