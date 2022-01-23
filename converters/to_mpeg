@@ -49,7 +49,7 @@ then
 fi
 
 measured="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}:measured_thresh=${measured_thresh}:offset=${target_offset}"
-if [[ "$measured_i" =~ ^(-[1-9][0-9]?|0)$ ]] || [[ "$measured_tp" =~ ^[+-]?([0-9]|[1-9][0-9])$ ]]
+if [[ "$measured_i" =~ ^(-[1-9][0-9]?|0)(\.[0-9]+)?$ ]] || [[ "$measured_tp" =~ ^[+-]?([0-9]|[1-9][0-9])(\.[0-9]+)?$ ]]
 then
     filters=(-filter:a "loudnorm=${norm_targets}:${measured}:linear=true")
 else
