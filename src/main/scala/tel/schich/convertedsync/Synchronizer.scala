@@ -57,19 +57,20 @@ object Synchronizer {
 			case (group, files) => println(s"\t$group -> ${files.length}")
 		}
 
-		val (filesToProcess, filesToRename: ParSeq[ConvertibleFile]) = if (conf.reEncodeAll) (sourceFiles, Nil)
-		else {
-			println("Detecting files to be processed ...")
-			val (missingOrInvalid, stillValid) = sourceFiles.partition { f =>
-				f.isInvalid || conf.enforceMime && f.mimeMismatched
-			}
+		val (filesToProcess, filesToRename: ParSeq[ConvertibleFile]) =
+			if (conf.reEncodeAll) (sourceFiles, ParSeq.empty)
+			else {
+				println("Detecting files to be processed ...")
+				val (missingOrInvalid, stillValid) = sourceFiles.partition { f =>
+					f.isInvalid || conf.enforceMime && f.mimeMismatched
+				}
 
-			println("Detecting files to be renamed ...")
-			val rename = stillValid.filter { f =>
-				f.isRenamed
+				println("Detecting files to be renamed ...")
+				val rename = stillValid.filter { f =>
+					f.isRenamed
+				}
+				(missingOrInvalid, rename)
 			}
-			(missingOrInvalid, rename)
-		}
 
 		if (conf.purge) {
 			println("Purging obsolete files from the target directory ...")

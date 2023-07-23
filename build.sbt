@@ -2,7 +2,7 @@ name := "ConvertedSync"
 
 version := "1.0"
 
-scalaVersion := "2.13.11"
+scalaVersion := "3.3.0"
 
 libraryDependencies ++= Seq(
     "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4",
@@ -12,4 +12,4 @@ libraryDependencies ++= Seq(
 
 mainClass := Some("tel.schich.convertedsync.Main")
 
-scalacOptions ++= Seq("-unchecked", "-deprecation", "-Xsource:3")
+scalacOptions ++= Seq("-unchecked", "-deprecation")
