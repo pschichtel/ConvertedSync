@@ -1,6 +1,6 @@
 package tel.schich.convertedsync
 
-import java.nio.file._
+import java.nio.file.*
 import java.nio.file.attribute.FileTime
 
 import scala.collection.immutable.ArraySeq
@@ -52,7 +52,7 @@ object Util {
 	}
 
 	def splitLines(in: String): IndexedSeq[String] =
-		ArraySeq.unsafeWrapArray(in.split("(?:\r\n|\r|\n)", -1))
+		ArraySeq.unsafeWrapArray(in.split("\r\n|\r|\n", -1))
 
 	implicit class OrderedFileTime(private val self: FileTime) extends AnyVal with Ordered[FileTime] {
 		override def compare(that: FileTime): Int = self.compareTo(that)

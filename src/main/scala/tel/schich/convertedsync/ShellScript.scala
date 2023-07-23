@@ -11,7 +11,7 @@ case class ShellScript(executable: Path, inheritIO: Boolean) {
 	private def build(args: Seq[String], inheritIO: Boolean): ProcessBuilder = {
 		val command = executable.toString +: args
 		val pb = new ProcessBuilder()
-		pb.command(command:_*)
+		pb.command(command *)
 		if (inheritIO) {
 			pb.inheritIO()
 		}

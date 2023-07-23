@@ -85,10 +85,10 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 
 	private def readAttribute(path: Path, name: String): Option[String] = {
 		attributeView(path).flatMap { view =>
-			if (view.list().contains(PreviousCoreAttributeName)) {
-				val buf = ByteBuffer.allocateDirect(view.size(PreviousCoreAttributeName))
+			if (view.list().contains(name)) {
+				val buf = ByteBuffer.allocateDirect(view.size(name))
 				// loop until the buffer is full
-				while (buf.hasRemaining) view.read(PreviousCoreAttributeName, buf)
+				while (buf.hasRemaining) view.read(name, buf)
 				// rewind the buffer position, otherwise decode will ne see the content
 				buf.rewind()
 				Some(UTF_8.decode(buf).toString)

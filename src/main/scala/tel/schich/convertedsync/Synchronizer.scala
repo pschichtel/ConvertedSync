@@ -133,7 +133,7 @@ object Synchronizer {
 		failures.isEmpty
 	}
 
-	def displayIndex(i: Int, len: Int): String =
+	private def displayIndex(i: Int, len: Int): String =
 		s"${(i + 1).toString.reverse.padTo(len.toString.length, ' ').reverse}."
 
 	def convert(conf: Config, local: IOAdapter, remote: IOAdapter)(file: ConvertibleFile): ConversionResult = {

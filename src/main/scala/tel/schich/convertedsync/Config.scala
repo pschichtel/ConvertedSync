@@ -25,7 +25,7 @@ object Config {
 		}
 	}
 
-	val defaults = Config(
+	val defaults: Config = Config(
 		null, null,
 		Paths.get("converters"), purge = false,
 		enforceMime = false, force = false,
