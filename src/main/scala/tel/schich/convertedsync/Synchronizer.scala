@@ -127,7 +127,7 @@ object Synchronizer {
 
 		if (coresToUpdate.nonEmpty) {
 			println("Storing new location in source files...")
-			coresToUpdate.foreach((local.updatePreviousCore _).tupled)
+			coresToUpdate.foreach(local.updatePreviousCore.tupled)
 		}
 
 		println("Done!")
