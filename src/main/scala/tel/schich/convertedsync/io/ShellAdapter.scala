@@ -11,7 +11,7 @@ import scala.collection.parallel.immutable.ParVector
 
 class ShellAdapter(mime: MimeDetector, script: ShellScript) extends IOAdapter {
 
-	val DefaultSeparator: Char = '/'
+	private val DefaultSeparator: Char = '/'
 
 	override lazy val separator: Char = {
 		val (result, out, _) = script.invokeAndReadError(Seq("separator"))

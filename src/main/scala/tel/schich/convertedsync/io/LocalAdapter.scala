@@ -15,7 +15,7 @@ import scala.util.{Failure, Success, Try}
 
 class LocalAdapter(mime: MimeDetector) extends IOAdapter
 {
-	val PreviousCoreAttributeName = s"previous-core"
+	private val PreviousCoreAttributeName = s"previous-core"
 
 	override val separator: Char = File.separatorChar
 

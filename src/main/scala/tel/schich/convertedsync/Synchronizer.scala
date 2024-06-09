@@ -13,7 +13,7 @@ import scala.collection.parallel.ParSeq
 
 object Synchronizer {
 
-	val TempSuffix: String = ".temporary"
+	private val TempSuffix: String = ".temporary"
 
 	private def syncFromTo(conf: Config, local: IOAdapter, remote: IOAdapter): Boolean = {
 
