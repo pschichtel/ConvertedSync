@@ -22,12 +22,13 @@ object Synchronizer {
 			System.exit(1)
 		}
 
-		if (conf.threadCount > 0) {
-			println(s"Using ${conf.threadCount} thread(s).")
-			Seq("min", "num", "max")
-				.map(p => s"scala.concurrent.context.${p}Threads")
-				.foreach(System.setProperty(_: String, "" + conf.threadCount))
-		}
+		val threadCount =
+			if (conf.threadCount > 0) conf.threadCount
+			else Runtime.getRuntime.availableProcessors()
+		println(s"Using $threadCount thread(s).")
+		Seq("min", "num", "max")
+			.map(p => s"scala.concurrent.context.${p}Threads")
+			.foreach(System.setProperty(_: String, "" + threadCount))
 
 		println(s"Scanning the target directory: ${conf.target} ...")
 		val (targetFiles, targetScanTime) = time(SECONDS) {
