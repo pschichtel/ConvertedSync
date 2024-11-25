@@ -2,7 +2,7 @@ name := "ConvertedSync"
 
 version := "1.0"
 
-scalaVersion := "3.4.2"
+scalaVersion := "3.4.3"
 libraryDependencies ++= Seq(
     "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4",
     "org.apache.tika" % "tika-core" % "2.9.2",
