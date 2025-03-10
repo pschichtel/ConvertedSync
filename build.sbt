@@ -4,8 +4,8 @@ version := "1.0"
 
 scalaVersion := "3.6.2"
 libraryDependencies ++= Seq(
-    "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4",
-    "org.apache.tika" % "tika-core" % "3.0.0",
+    "org.scala-lang.modules" %% "scala-parallel-collections" % "1.2.0",
+    "org.apache.tika" % "tika-core" % "3.1.0",
     "com.github.scopt" %% "scopt" % "4.1.0"
 )
 
