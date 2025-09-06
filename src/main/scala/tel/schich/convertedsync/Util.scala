@@ -20,7 +20,7 @@ object Util {
 				} catch {
 					case _: FileSystemException =>
 						// Copy the source and delete it afterwards if successful
-						Files.copy(from, to)
+						Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING)
 						Files.delete(from)
 						return true
 				}

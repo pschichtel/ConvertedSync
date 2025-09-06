@@ -88,7 +88,7 @@ class ShellAdapter(mime: MimeDetector, script: ShellScript) extends IOAdapter {
 	}
 
 	override def mkdirs(path: String): Boolean = {
-		script.invoke(Seq("mkdirs", path)) == 0
+		script.invoke(Seq("mkdirs", "-p", path)) == 0
 	}
 
 	override def updatePreviousCore(path: String, previousCore: String): Boolean = {

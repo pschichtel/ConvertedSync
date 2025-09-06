@@ -165,62 +165,63 @@ object Synchronizer {
 			if (intermediateTarget.equals(tmpTarget)) remote
 			else local
 
-		if (!local.exists(f.fullPath)) Failure(f, "The file was queued for conversion, but disappeared!")
-		else {
-			intermediateAdapter.mkdirs(Util.parentPath(intermediateTarget, intermediateAdapter.separator))
-			val (result, t) = if (f.mime == rule.targetMime && !conf.force) {
-				println("The input file mime type matches the target mime type, copying...")
-				time() {
-					if (intermediateAdapter.copy(f.fullPath, intermediateTarget)) Success
-					else Failure(f, "Failed to copy the file over to the target!")
+		if (!local.exists(f.fullPath)) {
+			return Failure(f, "The file was queued for conversion, but disappeared!")
+		}
+
+		if (!intermediateAdapter.mkdirs(Util.parentPath(intermediateTarget, intermediateAdapter.separator))) {
+			return Failure(f, "Failed to create the intermediate directory!")
+		}
+
+		if (!remote.mkdirs(targetDirectory)) {
+			return Failure(f, "Failed to create the target directory")
+		}
+
+		val (result, t) = if (f.mime == rule.targetMime && !conf.force) {
+			println("The input file mime type matches the target mime type, copying...")
+			time() {
+				if (intermediateAdapter.copy(f.fullPath, intermediateTarget)) Success
+				else Failure(f, "Failed to copy the file over to the target!")
+			}
+		} else {
+			time() {
+				runConverter(conf, f, intermediateTarget, rule).flatMap {
+					if (intermediateAdapter.exists(intermediateTarget)) Success
+					else Failure(f, s"Converter did not generate file $intermediateTarget")
 				}
+			}
+		}
+
+		if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
+			local.delete(intermediateTarget)
+		}
+
+		result flatMap {
+			val relativeFreeSpace = remote.relativeFreeSpace(targetDirectory) match {
+				case Left(error) =>
+					println(s"Failed to detect free space on target: $error")
+					Double.MaxValue
+				case Right(freeSpace) =>
+					println("Free space on target file system: %1.1f%%".format(freeSpace * 100))
+					freeSpace
+			}
+
+			if (relativeFreeSpace < conf.lowSpaceThreshold) Failure(f, s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)")
+			else Success
+		} flatMap {
+			if (target == expectedTarget) {
+				if (remote.rename(tmpTarget, target)) Success
+				else Failure(f, "Failed to rename the file to the final name!")
 			} else {
-				time() {
-					runConverter(conf, f, intermediateTarget, rule).flatMap {
-						if (intermediateAdapter.exists(intermediateTarget)) Success
-						else Failure(f, s"Converter did not generate file $intermediateTarget")
-					}
-				}
+				if (remote.delete(target)) {
+					if (remote.rename(tmpTarget, expectedTarget)) Success
+					else Failure(f, "Failed to move over the new version!")
+				} else Failure(f, "Failed to delete the existing file!")
 			}
-
-			if (intermediateAdapter == local && !remote.move(intermediateTarget, tmpTarget)) {
-				local.delete(intermediateTarget)
-			}
-
-			result flatMap {
-				if (!remote.exists(targetDirectory)) {
-					if (remote.mkdirs(targetDirectory)) Success
-					else Failure(f, "Failed to create the target directory")
-				} else Success
-			} flatMap {
-
-				val relativeFreeSpace = remote.relativeFreeSpace(targetDirectory) match {
-					case Left(error) =>
-						println(s"Failed to detect free space on target: $error")
-						Double.MaxValue
-					case Right(freeSpace) =>
-						println("Free space on target file system: %1.1f%%".format(freeSpace * 100))
-						freeSpace
-				}
-
-				if (relativeFreeSpace < conf.lowSpaceThreshold) Failure(f, s"The target file system ran out of disk space (free space below ${conf.lowSpaceThreshold}%)")
-				else Success
-
-			} flatMap {
-				if (target == expectedTarget) {
-					if (remote.rename(tmpTarget, target)) Success
-					else Failure(f, "Failed to rename the file to the final name!")
-				} else {
-					if (remote.delete(target)) {
-						if (remote.rename(tmpTarget, expectedTarget)) Success
-						else Failure(f, "Failed to move over the new version!")
-					} else Failure(f, "Failed to delete the existing file!")
-				}
-			} flatMap {
-				println(s"Conversion completed after ${t}ms: ${f.fullPath}\n"
-					+ s"\tNow at: $target")
-				Success
-			}
+		} flatMap {
+			println(s"Conversion completed after ${t}ms: ${f.fullPath}\n"
+				+ s"\tNow at: $target")
+			Success
 		}
 	}
 
