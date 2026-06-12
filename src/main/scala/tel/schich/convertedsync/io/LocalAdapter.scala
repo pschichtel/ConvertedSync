@@ -21,17 +21,21 @@ class LocalAdapter(mime: MimeDetector) extends IOAdapter
 
 	override def files(base: String): ParSeq[FileInfo] = {
 		val basePath = Paths.get(base)
-		val fileSeq = Files.walk(basePath)
-			.iterator()
-			.asScala
-			.toSeq
-		ParSeq.fromSpecific(fileSeq)
-			.filter(Files.isRegularFile(_))
-			.map(pathToFileInfo(basePath, _))
+		val filesStream = Files.walk(basePath)
+		try {
+			val fileSeq = filesStream
+				.filter(f => Files.isRegularFile(f) || Files.isSymbolicLink(f))
+				.iterator()
+				.asScala
+				.toSeq
+			ParSeq.fromSpecific(fileSeq)
+			 	.map(pathToFileInfo(basePath, _))
+		} finally {
+			filesStream.close()
+		}
 	}
 
 	private def pathToFileInfo(base: Path, path: Path): FileInfo = {
-
 		val relative = base.relativize(path)
 		val fileName = relative.getFileName.toString
 		val (strippedRelative, extension) = fileName.lastIndexOf('.') match {
