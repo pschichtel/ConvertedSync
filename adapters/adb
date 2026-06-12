@@ -8,6 +8,7 @@ echo_err()
 ADB_BIN="${ADB_BIN:-"$(command -v adb)"}"
 ADB_SELECT_DEVICE="${ADB_SELECT_DEVICE:-""}"
 
+# shellcheck disable=SC2016
 ADB_STDIN_ARG='"$(cat)"'
 
 selection=""
