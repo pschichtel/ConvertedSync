@@ -6,7 +6,7 @@ scalaVersion := "3.9.0"
 libraryDependencies ++= Seq(
     "org.scala-lang.modules" %% "scala-parallel-collections" % "1.2.0",
     "org.apache.tika" % "tika-core" % "4.1.0",
-    "com.github.scopt" %% "scopt" % "4.1.0"
+    "com.github.scopt" %% "scopt" % "4.2.0"
 )
 
 mainClass := Some("tel.schich.convertedsync.Main")
